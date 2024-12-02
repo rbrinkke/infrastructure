@@ -1,0 +1,30 @@
+- hosts: swarm-manager
+  become: yes
+  tasks:
+    - name: Install Docker Compose
+      get_url:
+        url: https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-`uname -s`-`uname -m`
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+
+    - name: Clone repository
+      git:
+        repo: 'https://github.com/yourusername/my-project.git'
+        dest: /home/youruser/my-project
+        update: yes
+
+    - name: Initialize Terraform
+      command: terraform init
+      args:
+        chdir: /home/youruser/my-project/terraform
+
+    - name: Apply Terraform configuration
+      command: terraform apply -auto-approve
+      args:
+        chdir: /home/youruser/my-project/terraform
+
+    - name: Run Ansible Playbook
+      command: ansible-playbook playbook.yml -i inventory.yml
+      args:
+        chdir: /home/youruser/my-project/ansible
+
