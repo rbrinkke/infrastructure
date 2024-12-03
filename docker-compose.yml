@@ -5,7 +5,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: my-dockerhub-user/my-app:latest
+    image: docker.io/rbrinkke/my-app:latest
     environment:
       - NODE_ENV=production
-
