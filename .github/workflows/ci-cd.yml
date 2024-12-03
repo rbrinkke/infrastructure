@@ -24,8 +24,8 @@ jobs:
 
       - name: Build and Push Docker Images
         run: |
-          docker-compose build
-          docker-compose push
+          docker compose build
+          docker compose push
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
@@ -59,3 +59,4 @@ jobs:
           script: |
             cd /home/rob/repos/infrastructure
             docker stack deploy -c docker-compose.yml infrastructure_stack
+
