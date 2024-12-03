@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: my-dockerhub-user/my-app:latest
+    environment:
+      - NODE_ENV=production
+
