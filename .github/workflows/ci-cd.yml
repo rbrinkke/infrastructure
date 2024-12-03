@@ -19,6 +19,9 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Initialize Docker Swarm
+        run: docker swarm init
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
