@@ -27,7 +27,7 @@ jobs:
           docker-compose build
           docker-compose push
 
-      - name: Terraform Init
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.4.0
@@ -47,7 +47,7 @@ jobs:
           username: ${{ secrets.SWARM_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            cd /home/youruser/my-project/ansible
+            cd /home/rob/repos/infrastructure/ansible
             ansible-playbook playbook.yml -i inventory.yml
 
       - name: Deploy Docker Stack
@@ -57,6 +57,5 @@ jobs:
           username: ${{ secrets.SWARM_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            cd /home/youruser/my-project
-            docker stack deploy -c docker-compose.yml your_stack_name
-
+            cd /home/rob/repos/infrastructure
+            docker stack deploy -c docker-compose.yml infrastructure_stack
