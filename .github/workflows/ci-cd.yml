@@ -59,4 +59,3 @@ jobs:
           script: |
             cd /home/rob/repos/infrastructure
             docker stack deploy -c docker-compose.yml infrastructure_stack
-
