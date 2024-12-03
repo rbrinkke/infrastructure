@@ -1,21 +1,21 @@
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = ">= 2.0.0"
+    }
+  }
+}
+
 provider "docker" {
-  host = "unix:///var/run/docker.sock"
+  host = "unix:///var/run/docker.sock" # Pas dit aan indien nodig, bijvoorbeeld voor Windows of een externe Docker-host
 }
 
 resource "docker_network" "webnet" {
   name = "webnet"
-  driver = "overlay"
 }
 
-resource "docker_network" "keycloak_network" {
-  name = "keycloak_network"
-  driver = "overlay"
+output "webnet_id" {
+  value = docker_network.webnet.id
 }
-
-resource "docker_network" "monitoring_net" {
-  name = "monitoring_net"
-  driver = "overlay"
-}
-
-# Voeg hier meer resources toe zoals volumes, secrets, etc.
 
