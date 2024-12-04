@@ -31,38 +31,21 @@ jobs:
       - name: Network Connectivity Test
         run: |
           set -x
-          echo "[DEBUG] Testing connectivity to ${{ secrets.SWARM_HOST }}..."
-          ping -c 4 ${{ secrets.SWARM_HOST }} || echo "[ERROR] Server is not reachable!"
+          echo "[DEBUG] Testing connectivity to 192.168.178.183..."
+          ping -c 4 192.168.178.183 || echo "[ERROR] Server is not reachable!"
           echo "[DEBUG] Checking SSH port (22) availability..."
-          nc -zv ${{ secrets.SWARM_HOST }} 22 || echo "[ERROR] SSH port is not open!"
+          nc -zv 192.168.178.183 22 || echo "[ERROR] SSH port is not open!"
 
       # 4. Test SSH-verbinding met uitgebreide debugging
       - name: Test SSH Connection
         run: |
           set -x
-          echo "[DEBUG] Attempting SSH connection to ${{ secrets.SWARM_HOST }}..."
-          ssh -vvv -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/id_ed25519 swarm_user@${{ secrets.SWARM_HOST }} <<EOF
+          echo "[DEBUG] Attempting SSH connection to 192.168.178.183..."
+          ssh -vvv -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/id_ed25519 swarm_user@192.168.178.183 <<EOF
             echo "Welcome to SSH Debug Test!"
             uptime
             whoami
             exit
 EOF
           echo "[DEBUG] SSH connection test complete."
-
-      # 5. Fallback-debugging als SSH faalt
-      - name: SSH Connection Fallback
-        if: failure()
-        run: |
-          echo "[ERROR] SSH connection failed. Debugging logs below:"
-          cat ~/.ssh/id_ed25519
-          echo "[INFO] Attempting alternate SSH commands..."
-          ssh -o BatchMode=no -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 swarm_user@${{ secrets.SWARM_HOST }} || echo "[ERROR] Alternate SSH attempt failed."
-
-      # 6. Debug logging voor server logs (optioneel)
-      - name: Server Logs Debugging
-        run: |
-          ssh -i ~/.ssh/id_ed25519 swarm_user@${{ secrets.SWARM_HOST }} <<EOF
-            echo "[DEBUG] Server logs:"
-            sudo tail -n 20 /var/log/auth.log
-EOF
 
