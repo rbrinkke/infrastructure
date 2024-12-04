@@ -47,26 +47,13 @@ jobs:
         run: terraform apply -auto-approve
         working-directory: ./terraform
 
-      - name: SSH Debug Permissions
-        run: |
-          ssh -vvv -o StrictHostKeyChecking=no swarm_user@192.168.178.183 "
-            echo 'Huidige gebruiker:' && whoami &&
-            echo 'Huidige directory:' && pwd &&
-            echo 'Controleer permissies van ansible directory:' &&
-            ls -ld /home/rob/repos/infrastructure/ansible &&
-            ls -l /home/rob/repos/infrastructure/ansible
-          "
-
       - name: Run Ansible Playbook
         run: |
-          ssh -vvv -o StrictHostKeyChecking=no swarm_user@192.168.178.183 "
-            cd /home/rob/repos/infrastructure/ansible &&
-            ansible-playbook playbook.yml -i inventory.yml
-          "
+          ansible-playbook playbook.yml -i inventory.yml -vvv
 
       - name: Deploy Docker Stack
         run: |
-          ssh -vvv -o StrictHostKeyChecking=no swarm_user@192.168.178.183 "
+          ssh -o StrictHostKeyChecking=no swarm_user@192.168.178.183 "
             cd /home/rob/repos/infrastructure &&
             docker stack deploy -c docker-compose.yml infrastructure_stack
           "
