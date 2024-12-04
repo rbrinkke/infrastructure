@@ -102,7 +102,7 @@ jobs:
             uptime
             whoami
             exit
-EOF
+          EOF
           echo "[DEBUG] SSH connection test complete."
         shell: bash
 
