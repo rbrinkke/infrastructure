@@ -23,7 +23,7 @@ jobs:
           echo "[DEBUG] Checking routing table..."
           ip route
           echo "[DEBUG] Checking Docker network (if applicable)..."
-          docker network ls || echo "Docker not available."
+          docker network ls || echo "[DEBUG] Docker not available."
           echo "[DEBUG] Displaying open network connections:"
           netstat -an
 
@@ -31,7 +31,7 @@ jobs:
       - name: Debug Runner Processes and Environment
         run: |
           set -x
-          echo "[DEBUG] Current processes:"
+          echo "[DEBUG] Listing current processes..."
           ps aux
           echo "[DEBUG] Current user and groups:"
           id
@@ -39,16 +39,24 @@ jobs:
           pwd
           echo "[DEBUG] Environment variables:"
           env
-          echo "[DEBUG] Uptime:"
+          echo "[DEBUG] System uptime:"
           uptime
 
-      # 4. Debug SSH-sleutel en permissies (indien nodig voor tests)
+      # 4. Debug SSH-sleutel en permissies
       - name: Validate Runner SSH Environment
         run: |
           set -x
           echo "[DEBUG] Validating SSH environment on the runner..."
-          ls -la ~/.ssh/ || echo "[ERROR] SSH directory not found."
-          ssh-keygen -lf ~/.ssh/id_ed25519 || echo "[ERROR] SSH key validation failed!"
+          if [ -d ~/.ssh ]; then
+            ls -la ~/.ssh/
+            if [ -f ~/.ssh/id_ed25519 ]; then
+              ssh-keygen -lf ~/.ssh/id_ed25519 || echo "[DEBUG] SSH key validation failed!"
+            else
+              echo "[DEBUG] No SSH key found in ~/.ssh/"
+            fi
+          else
+            echo "[DEBUG] SSH directory not found."
+          fi
 
       # 5. Debug firewallstatus
       - name: Debug Firewall Status
