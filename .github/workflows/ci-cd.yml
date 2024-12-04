@@ -1,15 +1,45 @@
-      - name: Deep Debug SSH Connection
+name: CI/CD Workflow
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout de repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # 2. Stel SSH-sleutel in met debugging
+      - name: Setup SSH Key
+        run: |
+          set -x  # Debugmodus aan
+          echo "[DEBUG] Creating SSH key directory..."
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo "[DEBUG] Verifying SSH key permissions..."
+          ls -l ~/.ssh/id_ed25519 || echo "[ERROR] Key not found!"
+          echo "[DEBUG] Validating private key with ssh-keygen..."
+          ssh-keygen -lf ~/.ssh/id_ed25519 || echo "[ERROR] Private key lijkt niet geldig!"
+
+      # 3. Controleer bereikbaarheid en poort 22
+      - name: Network Connectivity Test
         run: |
           set -x
-          echo "[DEBUG] Starting in-depth SSH debugging..."
-          echo "[DEBUG] Validating SSH key:"
-          ssh-keygen -lf ~/.ssh/id_ed25519 || echo "[ERROR] Key invalid!"
+          echo "[DEBUG] Testing connectivity to 192.168.178.183..."
+          ping -c 4 192.168.178.183 || echo "[ERROR] Server is not reachable!"
+          echo "[DEBUG] Checking SSH port (22) availability..."
+          nc -zv 192.168.178.183 22 || echo "[ERROR] SSH port is not open!"
 
-          echo "[DEBUG] Testing server reachability..."
-          ping -c 4 192.168.178.183 || echo "[ERROR] Host unreachable!"
-
-          echo "[DEBUG] Attempting SSH connection with extensive logging:"
-          timeout 60 ssh -vvv -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 swarm_user@192.168.178.183 "uptime && whoami" || echo "[ERROR] SSH failed after timeout!"
-
-          echo "[DEBUG] SSH debug complete."
+      # 4. Test SSH-verbinding met uitgebreide debugging
+      - name: Test SSH Connection
+        run: |
+          set -x
+          echo "[DEBUG] Attempting SSH connection to 192.168.178.183..."
+          ssh -vvv -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/id_ed25519 swarm_user@192.168.178.183 "uptime && whoami"
 
