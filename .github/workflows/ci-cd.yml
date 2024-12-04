@@ -56,6 +56,18 @@ jobs:
         working-directory: ./terraform
         shell: bash
 
+      - name: Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+        shell: bash
+
+      - name: Test SSH Connection
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa swarm_user@${{ secrets.SWARM_HOST }} "echo 'SSH verbinding succesvol'"
+        shell: bash
+
       - name: Run Ansible Playbook
         uses: appleboy/ssh-action@v0.1.3
         with:
