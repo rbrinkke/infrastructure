@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  debug-runner:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -14,54 +14,116 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      # 2. Debug Runner Netwerkomgeving
-      - name: Debug Runner Network Environment
-        run: |
-          set -x
-          echo "[DEBUG] Checking runner network environment..."
-          ip addr
-          echo "[DEBUG] Checking routing table..."
-          ip route
-          echo "[DEBUG] Checking Docker network (if applicable)..."
-          docker network ls || echo "[DEBUG] Docker not available."
-          echo "[DEBUG] Displaying open network connections:"
-          netstat -an
+      # 2. Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18.x'
 
-      # 3. Debug processen en omgeving
-      - name: Debug Runner Processes and Environment
+      - name: Verify Node.js Installation
         run: |
           set -x
-          echo "[DEBUG] Listing current processes..."
-          ps aux
-          echo "[DEBUG] Current user and groups:"
-          id
-          echo "[DEBUG] Current working directory:"
-          pwd
-          echo "[DEBUG] Environment variables:"
-          env
-          echo "[DEBUG] System uptime:"
-          uptime
+          echo "[DEBUG] Node.js en npm versies:"
+          node -v
+          npm -v
 
-      # 4. Debug SSH-sleutel en permissies
-      - name: Validate Runner SSH Environment
+      # 3. Login bij Docker Hub
+      - name: Login to Docker Hub
         run: |
           set -x
-          echo "[DEBUG] Validating SSH environment on the runner..."
-          if [ -d ~/.ssh ]; then
-            ls -la ~/.ssh/
-            if [ -f ~/.ssh/id_ed25519 ]; then
-              ssh-keygen -lf ~/.ssh/id_ed25519 || echo "[DEBUG] SSH key validation failed!"
-            else
-              echo "[DEBUG] No SSH key found in ~/.ssh/"
-            fi
-          else
-            echo "[DEBUG] SSH directory not found."
-          fi
+          echo "[DEBUG] Logging in to Docker Hub"
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
-      # 5. Debug firewallstatus
-      - name: Debug Firewall Status
+      # 4. Initialiseer Docker Swarm
+      - name: Initialize Docker Swarm
         run: |
           set -x
-          echo "[DEBUG] Checking firewall status..."
-          sudo ufw status || echo "[DEBUG] Firewall not active or not accessible."
+          echo "[DEBUG] Initializing Docker Swarm"
+          docker swarm init || echo "Docker Swarm is mogelijk al geïnitialiseerd"
+
+      # 5. Terraform configureren
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.4.0
+
+      - name: Terraform Init
+        run: |
+          set -x
+          echo "[DEBUG] Initializing Terraform"
+          terraform init
+        working-directory: ./terraform
+
+      - name: Terraform Apply
+        run: |
+          set -x
+          echo "[DEBUG] Applying Terraform configuration"
+          terraform apply -auto-approve
+        working-directory: ./terraform
+
+      # 6. Stel SSH-sleutel in met debugging
+      - name: Setup SSH Key
+        run: |
+          set -x  # Debugmodus aan
+          echo "[DEBUG] Creating SSH key directory..."
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          echo "[DEBUG] Verifying SSH key permissions..."
+          ls -l ~/.ssh/id_rsa || echo "[ERROR] Key not found!"
+          echo "[DEBUG] Validating private key with ssh-keygen..."
+          ssh-keygen -lf ~/.ssh/id_rsa || echo "[ERROR] Private key lijkt niet geldig!"
+        shell: bash
+
+      # 7. Voeg server toe aan known_hosts
+      - name: Add server to known_hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.SWARM_HOST }} >> ~/.ssh/known_hosts
+
+      # 8. Controleer bereikbaarheid en poort 22
+      - name: Network Connectivity Test
+        run: |
+          set -x
+          echo "[DEBUG] Testing connectivity to ${{ secrets.SWARM_HOST }}..."
+          ping -c 4 ${{ secrets.SWARM_HOST }} || echo "[ERROR] Server is not reachable!"
+          echo "[DEBUG] Checking SSH port (22) availability..."
+          nc -zv ${{ secrets.SWARM_HOST }} 22 || echo "[ERROR] SSH port is not open!"
+
+      # 9. Test SSH-verbinding met uitgebreide debugging
+      - name: Test SSH Connection
+        run: |
+          set -x
+          echo "[DEBUG] Attempting SSH connection to ${{ secrets.SWARM_HOST }}..."
+          ssh -vvv -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/id_rsa swarm_user@${{ secrets.SWARM_HOST }} <<EOF
+            echo "Welcome to SSH Debug Test!"
+            uptime
+            whoami
+            exit
+EOF
+          echo "[DEBUG] SSH connection test complete."
+        shell: bash
+
+      # 10. Voer Ansible playbook uit
+      - name: Run Ansible Playbook
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.SWARM_HOST }}
+          username: swarm_user
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -x
+            cd ~/repos/infrastructure/ansible
+            ansible-playbook playbook.yml -i inventory.yml
+
+      # 11. Deploy Docker Stack
+      - name: Deploy Docker Stack
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.SWARM_HOST }}
+          username: swarm_user
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -x
+            cd ~/repos/infrastructure  
+            docker stack deploy -c docker-compose.yml infrastructure_stack
 
