@@ -46,8 +46,24 @@ jobs:
           ip route
           echo "[DEBUG] Checking Docker network (if applicable)..."
           docker network ls || echo "Docker not available."
+          echo "[DEBUG] Current processes:"
+          ps aux
 
-      # 5. Controleer SSH-sleutel en permissies op de runner
+      # 5. Controleer omgeving van de runner
+      - name: Validate Runner Environment
+        run: |
+          set -x
+          echo "[DEBUG] Validating runner environment..."
+          echo "[DEBUG] Current user:"
+          whoami
+          echo "[DEBUG] Current working directory:"
+          pwd
+          echo "[DEBUG] Environment variables:"
+          env
+          echo "[DEBUG] Uptime:"
+          uptime
+
+      # 6. Controleer SSH-sleutel en permissies op de runner
       - name: Validate Runner SSH Environment
         run: |
           set -x
@@ -55,14 +71,14 @@ jobs:
           ls -la ~/.ssh/
           ssh-keygen -lf ~/.ssh/id_ed25519 || echo "[ERROR] SSH key validation failed!"
 
-      # 6. Test SSH-verbinding met uitgebreide debugging
+      # 7. Test SSH-verbinding met uitgebreide debugging
       - name: Test SSH Connection
         run: |
           set -x
           echo "[DEBUG] Attempting SSH connection to 192.168.178.183..."
           ssh -vvv -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/id_ed25519 swarm_user@192.168.178.183 "echo 'SSH connection successful!' && uptime && whoami" || echo "[ERROR] SSH connection failed!"
 
-      # 7. Voeg extra debugging toe als de verbinding mislukt
+      # 8. Voeg extra debugging toe als de verbinding mislukt
       - name: Debug SSH Failure
         if: failure()
         run: |
@@ -75,5 +91,9 @@ jobs:
           echo "[DEBUG] Showing SSH agent info (if available):"
           ssh-add -l || echo "[ERROR] No SSH agent running."
           echo "[DEBUG] Showing system firewall status (if applicable):"
-          sudo ufw status || echo "Firewall not active or not accessible."
+          sudo ufw status || echo "[ERROR] Firewall not active or not accessible."
+          echo "[DEBUG] Displaying network connections:"
+          netstat -an
+          echo "[DEBUG] Tracing route to 192.168.178.183:"
+          traceroute 192.168.178.183 || echo "[ERROR] Unable to trace route to target."
 
