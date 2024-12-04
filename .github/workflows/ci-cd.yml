@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  deploy:
+  debug-runner:
     runs-on: ubuntu-latest
 
     steps:
@@ -14,29 +14,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      # 2. Stel SSH-sleutel in met debugging
-      - name: Setup SSH Key
-        run: |
-          set -x
-          echo "[DEBUG] Creating SSH key directory..."
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          echo "[DEBUG] Verifying SSH key permissions..."
-          ls -l ~/.ssh/id_ed25519 || echo "[ERROR] Key not found!"
-          echo "[DEBUG] Validating private key with ssh-keygen..."
-          ssh-keygen -lf ~/.ssh/id_ed25519 || echo "[ERROR] Private key lijkt niet geldig!"
-
-      # 3. Controleer netwerkconnectiviteit en poort 22
-      - name: Network Connectivity Test
-        run: |
-          set -x
-          echo "[DEBUG] Testing connectivity to 192.168.178.183..."
-          ping -c 4 192.168.178.183 || echo "[ERROR] Server is not reachable!"
-          echo "[DEBUG] Checking SSH port (22) availability..."
-          nc -zv 192.168.178.183 22 || echo "[ERROR] SSH port is not open!"
-
-      # 4. Debug Runner Netwerkomgeving
+      # 2. Debug Runner Netwerkomgeving
       - name: Debug Runner Network Environment
         run: |
           set -x
@@ -46,16 +24,17 @@ jobs:
           ip route
           echo "[DEBUG] Checking Docker network (if applicable)..."
           docker network ls || echo "Docker not available."
-          echo "[DEBUG] Current processes:"
-          ps aux
+          echo "[DEBUG] Displaying open network connections:"
+          netstat -an
 
-      # 5. Controleer omgeving van de runner
-      - name: Validate Runner Environment
+      # 3. Debug processen en omgeving
+      - name: Debug Runner Processes and Environment
         run: |
           set -x
-          echo "[DEBUG] Validating runner environment..."
-          echo "[DEBUG] Current user:"
-          whoami
+          echo "[DEBUG] Current processes:"
+          ps aux
+          echo "[DEBUG] Current user and groups:"
+          id
           echo "[DEBUG] Current working directory:"
           pwd
           echo "[DEBUG] Environment variables:"
@@ -63,37 +42,18 @@ jobs:
           echo "[DEBUG] Uptime:"
           uptime
 
-      # 6. Controleer SSH-sleutel en permissies op de runner
+      # 4. Debug SSH-sleutel en permissies (indien nodig voor tests)
       - name: Validate Runner SSH Environment
         run: |
           set -x
           echo "[DEBUG] Validating SSH environment on the runner..."
-          ls -la ~/.ssh/
+          ls -la ~/.ssh/ || echo "[ERROR] SSH directory not found."
           ssh-keygen -lf ~/.ssh/id_ed25519 || echo "[ERROR] SSH key validation failed!"
 
-      # 7. Test SSH-verbinding met uitgebreide debugging
-      - name: Test SSH Connection
+      # 5. Debug firewallstatus
+      - name: Debug Firewall Status
         run: |
           set -x
-          echo "[DEBUG] Attempting SSH connection to 192.168.178.183..."
-          ssh -vvv -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/id_ed25519 swarm_user@192.168.178.183 "echo 'SSH connection successful!' && uptime && whoami" || echo "[ERROR] SSH connection failed!"
-
-      # 8. Voeg extra debugging toe als de verbinding mislukt
-      - name: Debug SSH Failure
-        if: failure()
-        run: |
-          set -x
-          echo "[ERROR] SSH connection failed! Collecting debug information..."
-          echo "[DEBUG] Showing SSH known_hosts:"
-          cat ~/.ssh/known_hosts || echo "[ERROR] No known_hosts file found."
-          echo "[DEBUG] Showing active SSH processes:"
-          ps aux | grep ssh || echo "[ERROR] No SSH processes running."
-          echo "[DEBUG] Showing SSH agent info (if available):"
-          ssh-add -l || echo "[ERROR] No SSH agent running."
-          echo "[DEBUG] Showing system firewall status (if applicable):"
-          sudo ufw status || echo "[ERROR] Firewall not active or not accessible."
-          echo "[DEBUG] Displaying network connections:"
-          netstat -an
-          echo "[DEBUG] Tracing route to 192.168.178.183:"
-          traceroute 192.168.178.183 || echo "[ERROR] Unable to trace route to target."
+          echo "[DEBUG] Checking firewall status..."
+          sudo ufw status || echo "[DEBUG] Firewall not active or not accessible."
 
