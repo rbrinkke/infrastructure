@@ -10,6 +10,7 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      # 1. Basisinformatie over de runner
       - name: Runner Info
         run: |
           set -x
@@ -23,6 +24,7 @@ jobs:
           env
         shell: bash
 
+      # 2. Netwerkconfiguratie inspecteren
       - name: Network Configuration
         run: |
           set -x
@@ -34,13 +36,26 @@ jobs:
           cat /etc/resolv.conf
         shell: bash
 
+      # 3. Controleer of 'ss' beschikbaar is
+      - name: Check 'ss' Command Availability
+        run: |
+          set -x
+          if command -v ss > /dev/null; then
+            echo "[INFO] 'ss' command is available."
+          else
+            echo "[ERROR] 'ss' command is not available."
+          fi
+        shell: bash
+
+      # 4. Open poorten en luisterende services
       - name: Open Ports and Listening Services
         run: |
           set -x
           echo "[INFO] Luisterende poorten:"
-          ss -tulpn || echo "[INFO] 'ss' commando niet beschikbaar"
+          ss -tulpn || echo "[ERROR] 'ss' commando niet beschikbaar"
         shell: bash
 
+      # 5. Controleer beschikbare tools
       - name: Check Available Tools
         run: |
           set -x
@@ -51,15 +66,7 @@ jobs:
           which terraform || echo "terraform niet gevonden"
         shell: bash
 
-      - name: Disk Usage and Layout
-        run: |
-          set -x
-          echo "[INFO] Schijfruimte gebruik:"
-          df -h
-          echo "[INFO] Schijfindeling:"
-          lsblk
-        shell: bash
-
+      # 6. Controleer actieve processen
       - name: Running Processes
         run: |
           set -x
@@ -67,6 +74,7 @@ jobs:
           ps aux
         shell: bash
 
+      # 7. Internetconnectiviteitstest
       - name: Internet Connectivity Test
         run: |
           set -x
@@ -76,10 +84,51 @@ jobs:
           curl -I https://www.google.com || echo "[ERROR] Kan geen HTTPS-verbinding maken met google.com"
         shell: bash
 
-      - name: GitHub Actions Environment Variables
+      # 8. Ping naar doelserver
+      - name: Ping Target Server
         run: |
           set -x
-          echo "[INFO] GitHub Actions specifieke omgevingsvariabelen:"
-          env | grep GITHUB_
+          echo "[INFO] Pingen naar doelserver..."
+          ping -c 4 ${{ secrets.SWARM_HOST }} || echo "[ERROR] Kan doelserver niet bereiken"
+        shell: bash
+
+      # 9. DNS-resolutie test
+      - name: DNS Resolution Test
+        run: |
+          set -x
+          echo "[INFO] DNS-resolutie test voor doelserver..."
+          nslookup ${{ secrets.SWARM_HOST }} || echo "[ERROR] Kan hostnaam niet resolven"
+        shell: bash
+
+      # 10. Traceroute naar doelserver
+      - name: Traceroute to Target Server
+        run: |
+          set -x
+          echo "[INFO] Traceroute naar doelserver..."
+          traceroute ${{ secrets.SWARM_HOST }} || echo "[ERROR] Traceroute mislukt"
+        shell: bash
+
+      # 11. Controleer SSH-poort op doelserver
+      - name: Check SSH Port
+        run: |
+          set -x
+          echo "[INFO] Controleer of poort 22 open is op de doelserver..."
+          nc -zv ${{ secrets.SWARM_HOST }} 22 || echo "[ERROR] Poort 22 is niet bereikbaar"
+        shell: bash
+
+      # 12. Firewall-instellingen op de runner
+      - name: Firewall Rules
+        run: |
+          set -x
+          echo "[INFO] Firewall regels:"
+          sudo iptables -L -n -v
+        shell: bash
+
+      # 13. Controleer hosts file
+      - name: Hosts File
+        run: |
+          set -x
+          echo "[INFO] /etc/hosts inhoud:"
+          cat /etc/hosts
         shell: bash
 
