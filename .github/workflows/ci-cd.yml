@@ -1,14 +1,11 @@
 name: CI/CD Pipeline
-
 on:
   push:
     branches:
       - main
-
 jobs:
   deploy:
     runs-on: self-hosted
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -48,13 +45,16 @@ jobs:
         working-directory: ./terraform
 
       - name: Run Ansible Playbook
-        run: |
-          ansible-playbook playbook.yml -i inventory.yml -vvv
+        run: ansible-playbook playbook.yml -i inventory.yml -vvv
+        working-directory: ./ansible
 
       - name: Deploy Docker Stack
+        env:
+          REMOTE_HOST: 192.168.178.183
+          REMOTE_USER: swarm_user
+          REMOTE_PATH: /home/rob/repos/infrastructure
         run: |
-          ssh -o StrictHostKeyChecking=no swarm_user@192.168.178.183 "
-            cd /home/rob/repos/infrastructure &&
+          ssh -o StrictHostKeyChecking=no ${{ env.REMOTE_USER }}@${{ env.REMOTE_HOST }} "
+            cd ${{ env.REMOTE_PATH }} &&
             docker stack deploy -c docker-compose.yml infrastructure_stack
           "
-
