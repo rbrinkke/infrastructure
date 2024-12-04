@@ -10,63 +10,63 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # Check out the repository code
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # Set up SSH Agent
       - name: Setup SSH Agent
         uses: webfactory/ssh-agent@v0.5.4
         with:
           ssh-private-key: ${{ secrets.SSH_KEY }}
 
-      # Log in to Docker Hub
       - name: Login to Docker Hub
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         run: |
-          docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD"
+          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
 
-      # Initialize Docker Swarm
       - name: Initialize Docker Swarm
         run: |
           docker swarm init || echo "Docker Swarm is mogelijk al geïnitialiseerd"
 
-      # Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.4.0
 
-      # Install Node.js (indien nodig)
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '16' # Pas aan naar de vereiste versie
+          node-version: '16'
 
-      # Initialize Terraform
       - name: Terraform Init
         run: terraform init
         working-directory: ./terraform
 
-      # Apply Terraform configuration
       - name: Terraform Apply
         run: terraform apply -auto-approve
         working-directory: ./terraform
 
-      # Run Ansible Playbook with Debugging
+      - name: SSH Debug Permissions
+        run: |
+          ssh -vvv -o StrictHostKeyChecking=no swarm_user@192.168.178.183 "
+            echo 'Huidige gebruiker:' && whoami &&
+            echo 'Huidige directory:' && pwd &&
+            echo 'Controleer permissies van ansible directory:' &&
+            ls -ld /home/rob/repos/infrastructure/ansible &&
+            ls -l /home/rob/repos/infrastructure/ansible
+          "
+
       - name: Run Ansible Playbook
         run: |
-          ssh -vvv -o StrictHostKeyChecking=no swarm_user@${{ secrets.SWARM_HOST }} "
+          ssh -vvv -o StrictHostKeyChecking=no swarm_user@192.168.178.183 "
             cd /home/rob/repos/infrastructure/ansible &&
             ansible-playbook playbook.yml -i inventory.yml
           "
 
-      # Deploy Docker stack with Debugging
       - name: Deploy Docker Stack
         run: |
-          ssh -vvv -o StrictHostKeyChecking=no swarm_user@${{ secrets.SWARM_HOST }} "
+          ssh -vvv -o StrictHostKeyChecking=no swarm_user@192.168.178.183 "
             cd /home/rob/repos/infrastructure &&
             docker stack deploy -c docker-compose.yml infrastructure_stack
           "
