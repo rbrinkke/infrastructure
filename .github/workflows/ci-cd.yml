@@ -1,4 +1,4 @@
-name: Runner Diagnostics
+name: CI/CD Pipeline
 
 on:
   push:
@@ -6,153 +6,63 @@ on:
       - main
 
 jobs:
-  diagnose_runner:
+  deploy:
     runs-on: self-hosted
 
     steps:
-      # 1. Basisinformatie over de runner
-      - name: Runner Info
-        run: |
-          set -x
-          echo "[INFO] Systeeminformatie:"
-          uname -a
-          echo "[INFO] Huidige gebruiker:"
-          whoami
-          echo "[INFO] Home directory:"
-          echo $HOME
-          echo "[INFO] Omgevingsvariabelen:"
-          env
-        shell: bash
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-      # 2. Netwerkconfiguratie inspecteren
-      - name: Network Configuration
-        run: |
-          set -x
-          echo "[INFO] Netwerkinterfaces en IP-adressen:"
-          ip addr show
-          echo "[INFO] Routing tabel:"
-          ip route
-          echo "[INFO] DNS resolvers:"
-          cat /etc/resolv.conf
-        shell: bash
+      - name: Verify SSH Connection
+        uses: appleboy/ssh-action@v0.1.3
+        with:
+          host: ${{ secrets.SWARM_HOST }}
+          username: swarm_user
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            echo "SSH-verbinding succesvol!"
 
-      # 3. Controleer of essentiële commando's beschikbaar zijn
-      - name: Check Essential Commands
+      - name: Login to Docker Hub
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         run: |
-          set -x
-          echo "[INFO] Beschikbare commando's:"
-          command -v ssh || echo "ssh niet gevonden"
-          command -v docker || echo "docker niet gevonden"
-          command -v ansible || echo "ansible niet gevonden"
-          command -v terraform || echo "terraform niet gevonden"
-          command -v ss || echo "ss niet gevonden"
-          command -v traceroute || echo "traceroute niet gevonden"
-          command -v nc || echo "nc (netcat) niet gevonden"
-        shell: bash
+          docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD"
 
-      # 4. Open poorten en luisterende services
-      - name: Open Ports and Listening Services
+      - name: Initialize Docker Swarm
         run: |
-          set -x
-          echo "[INFO] Luisterende poorten en services met 'ss':"
-          ss -tulpn || echo "[ERROR] 'ss' commando niet beschikbaar"
-        shell: bash
+          docker swarm init || echo "Docker Swarm is mogelijk al geïnitialiseerd"
 
-      # 5. Controleer beschikbare tools en versies
-      - name: Check Available Tools and Versions
-        run: |
-          set -x
-          echo "[INFO] Beschikbare tools en hun versies:"
-          ssh -V || echo "ssh versie onbekend"
-          docker --version || echo "docker versie onbekend"
-          ansible --version || echo "ansible versie onbekend"
-          terraform version || echo "terraform versie onbekend"
-          ss -V || echo "ss versie onbekend"
-          traceroute --version || echo "traceroute versie onbekend"
-          nc -h || echo "nc (netcat) versie onbekend"
-        shell: bash
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.4.0
 
-      # 6. Controleer actieve processen
-      - name: Running Processes
-        run: |
-          set -x
-          echo "[INFO] Actieve processen:"
-          ps aux
-        shell: bash
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ./terraform
 
-      # 7. Schijfruimte gebruik en schijfindeling
-      - name: Disk Usage and Layout
-        run: |
-          set -x
-          echo "[INFO] Schijfruimte gebruik:"
-          df -h
-          echo "[INFO] Schijfindeling:"
-          lsblk
-        shell: bash
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        working-directory: ./terraform
 
-      # 8. Controleer firewall-instellingen op de runner
-      - name: Firewall Rules
-        run: |
-          set -x
-          echo "[INFO] Firewall regels met iptables:"
-          sudo iptables -L -n -v || echo "[ERROR] Kan iptables niet uitvoeren (mogelijk geen sudo rechten)"
-        shell: bash
+      - name: Run Ansible Playbook
+        uses: appleboy/ssh-action@v0.1.3
+        with:
+          host: ${{ secrets.SWARM_HOST }}
+          username: swarm_user
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /home/rob/repos/infrastructure/ansible
+            ansible-playbook playbook.yml -i inventory.yml
 
-      # 9. Controleer /etc/hosts bestand
-      - name: Hosts File
-        run: |
-          set -x
-          echo "[INFO] Inhoud van /etc/hosts:"
-          cat /etc/hosts
-        shell: bash
-
-      # 10. Controleer logbestanden (optioneel)
-      - name: View System Logs
-        run: |
-          set -x
-          echo "[INFO] Laatste regels van /var/log/syslog:"
-          sudo tail -n 100 /var/log/syslog || echo "[ERROR] Kan /var/log/syslog niet lezen (mogelijk geen sudo rechten)"
-        shell: bash
-
-      # 11. Controleer gebruikersgroepen
-      - name: Check User Groups
-        run: |
-          set -x
-          echo "[INFO] Gebruikersgroepen van 'rob':"
-          groups rob
-        shell: bash
-
-      # 12. Controleer of sudo rechten beschikbaar zijn
-      - name: Check Sudo Access
-        run: |
-          set -x
-          echo "[INFO] Test sudo rechten:"
-          sudo -l || echo "[ERROR] Geen sudo rechten beschikbaar"
-        shell: bash
-
-      # 13. Controleer omgeving van GitHub Actions
-      - name: GitHub Actions Environment Variables
-        run: |
-          set -x
-          echo "[INFO] GitHub Actions specifieke omgevingsvariabelen:"
-          env | grep GITHUB_
-        shell: bash
-
-      # 14. Controleer installatie van net-tools (optioneel)
-      - name: Check net-tools Installation
-        run: |
-          set -x
-          echo "[INFO] Controleer of net-tools geïnstalleerd zijn:"
-          dpkg -l | grep net-tools || echo "[INFO] net-tools niet geïnstalleerd"
-        shell: bash
-
-      # 15. Controleer SSH-sleutel configuratie
-      - name: Verify SSH Key Configuration
-        run: |
-          set -x
-          echo "[INFO] Inhoud van SSH directory:"
-          ls -la /home/rob/.ssh/
-          echo "[INFO] Inhoud van known_hosts:"
-          cat /home/rob/.ssh/known_hosts || echo "[INFO] known_hosts bestand bestaat niet"
-        shell: bash
+      - name: Deploy Docker Stack
+        uses: appleboy/ssh-action@v0.1.3
+        with:
+          host: ${{ secrets.SWARM_HOST }}
+          username: swarm_user
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /home/rob/repos/infrastructure
+            docker stack deploy -c docker-compose.yml infrastructure_stack
 
