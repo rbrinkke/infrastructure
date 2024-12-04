@@ -36,10 +36,37 @@ jobs:
           echo "[DEBUG] Checking SSH port (22) availability..."
           nc -zv 192.168.178.183 22 || echo "[ERROR] SSH port is not open!"
 
-      # 4. Test SSH-verbinding met uitgebreide debugging
+      # 4. Controleer SSH-sleutel en permissies op de runner
+      - name: Validate Runner SSH Environment
+        run: |
+          set -x
+          echo "[DEBUG] Validating SSH environment on the runner..."
+          ls -la ~/.ssh/
+          ssh-keygen -lf ~/.ssh/id_ed25519 || echo "[ERROR] SSH key validation failed!"
+          echo "[DEBUG] Verifying SSH config..."
+          cat /etc/ssh/ssh_config || echo "[ERROR] Unable to read SSH config!"
+
+      # 5. Test SSH-verbinding met uitgebreide debugging
       - name: Test SSH Connection
         run: |
           set -x
           echo "[DEBUG] Attempting SSH connection to 192.168.178.183..."
-          ssh -vvv -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/id_ed25519 swarm_user@192.168.178.183 "uptime && whoami"
+          ssh -vvv -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/id_ed25519 swarm_user@192.168.178.183 <<EOF
+            echo "SSH connection successful!"
+            uptime
+            whoami
+EOF
+
+      # 6. Voeg extra debugging toe als de verbinding mislukt
+      - name: Debug SSH Failure
+        if: failure()
+        run: |
+          set -x
+          echo "[ERROR] SSH connection failed! Collecting debug information..."
+          echo "[DEBUG] Showing SSH known_hosts:"
+          cat ~/.ssh/known_hosts || echo "[ERROR] No known_hosts file found."
+          echo "[DEBUG] Showing active SSH processes:"
+          ps aux | grep ssh || echo "[ERROR] No SSH processes running."
+          echo "[DEBUG] Showing SSH agent info (if available):"
+          ssh-add -l || echo "[ERROR] No SSH agent running."
 
