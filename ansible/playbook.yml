@@ -12,18 +12,25 @@
         dest: /usr/local/bin/docker-compose
         mode: '0755'
 
+    - name: Configure Git safe directory
+      command: git config --global --add safe.directory /home/rob/repos/infrastructure
+      become_user: rob
+
     - name: Clone repository
       git:
         repo: 'https://github.com/rbrinkke/infrastructure.git'
         dest: /home/rob/repos/infrastructure
         update: yes
+      become_user: rob
 
     - name: Initialize Terraform
       command: terraform init
       args:
         chdir: /home/rob/repos/infrastructure/terraform
+      become_user: rob
 
     - name: Apply Terraform configuration
       command: terraform apply -auto-approve
       args:
         chdir: /home/rob/repos/infrastructure/terraform
+      become_user: rob
