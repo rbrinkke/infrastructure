@@ -1,4 +1,4 @@
-name: CI/CD Workflow
+name: Runner Diagnostics
 
 on:
   push:
@@ -6,124 +6,138 @@ on:
       - main
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
+  diagnose_runner:
+    runs-on: self-hosted
 
     steps:
-      # 1. Checkout de repository
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      # 2. Setup Node.js
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18.x'
-
-      - name: Verify Node.js Installation
+      # 1. Basis informatie over de runner
+      - name: Runner Info
         run: |
           set -x
-          echo "[DEBUG] Node.js en npm versies:"
-          node -v
-          npm -v
-
-      # 3. Login bij Docker Hub
-      - name: Login to Docker Hub
-        run: |
-          set -x
-          echo "[DEBUG] Logging in to Docker Hub"
-          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-
-      # 4. Initialiseer Docker Swarm
-      - name: Initialize Docker Swarm
-        run: |
-          set -x
-          echo "[DEBUG] Initializing Docker Swarm"
-          docker swarm init || echo "Docker Swarm is mogelijk al geïnitialiseerd"
-
-      # 5. Terraform configureren
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.4.0
-
-      - name: Terraform Init
-        run: |
-          set -x
-          echo "[DEBUG] Initializing Terraform"
-          terraform init
-        working-directory: ./terraform
-
-      - name: Terraform Apply
-        run: |
-          set -x
-          echo "[DEBUG] Applying Terraform configuration"
-          terraform apply -auto-approve
-        working-directory: ./terraform
-
-      # 6. Stel SSH-sleutel in met debugging
-      - name: Setup SSH Key
-        run: |
-          set -x  # Debugmodus aan
-          echo "[DEBUG] Creating SSH key directory..."
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          echo "[DEBUG] Verifying SSH key permissions..."
-          ls -l ~/.ssh/id_rsa || echo "[ERROR] Key not found!"
-          echo "[DEBUG] Validating private key with ssh-keygen..."
-          ssh-keygen -lf ~/.ssh/id_rsa || echo "[ERROR] Private key lijkt niet geldig!"
+          echo "[INFO] Runner systeeminformatie:"
+          uname -a
+          echo "[INFO] Huidige gebruiker:"
+          whoami
+          echo "[INFO] Home directory:"
+          echo $HOME
+          echo "[INFO] Omgevingsvariabelen:"
+          env
         shell: bash
 
-      # 7. Voeg server toe aan known_hosts
-      - name: Add server to known_hosts
-        run: |
-          ssh-keyscan -H ${{ secrets.SWARM_HOST }} >> ~/.ssh/known_hosts
-
-      # 8. Controleer bereikbaarheid en poort 22
-      - name: Network Connectivity Test
+      # 2. Netwerkconfiguratie inspecteren
+      - name: Network Configuration
         run: |
           set -x
-          echo "[DEBUG] Testing connectivity to ${{ secrets.SWARM_HOST }}..."
-          ping -c 4 ${{ secrets.SWARM_HOST }} || echo "[ERROR] Server is not reachable!"
-          echo "[DEBUG] Checking SSH port (22) availability..."
-          nc -zv ${{ secrets.SWARM_HOST }} 22 || echo "[ERROR] SSH port is not open!"
-
-      # 9. Test SSH-verbinding met uitgebreide debugging
-      - name: Test SSH Connection
-        run: |
-          set -x
-          echo "[DEBUG] Attempting SSH connection to ${{ secrets.SWARM_HOST }}..."
-          ssh -vvv -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/id_rsa swarm_user@${{ secrets.SWARM_HOST }} <<EOF
-            echo "Welcome to SSH Debug Test!"
-            uptime
-            whoami
-            exit
-          EOF
-          echo "[DEBUG] SSH connection test complete."
+          echo "[INFO] Netwerkinterfaces en IP-adressen:"
+          ip addr show
+          echo "[INFO] Routing tabel:"
+          ip route
+          echo "[INFO] DNS resolvers:"
+          cat /etc/resolv.conf
         shell: bash
 
-      # 10. Voer Ansible playbook uit
-      - name: Run Ansible Playbook
-        uses: appleboy/ssh-action@v0.1.7
-        with:
-          host: ${{ secrets.SWARM_HOST }}
-          username: swarm_user
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            set -x
-            cd ~/repos/infrastructure/ansible
-            ansible-playbook playbook.yml -i inventory.yml
+      # 3. Controleer firewall instellingen
+      - name: Firewall Rules
+        run: |
+          set -x
+          echo "[INFO] Firewall regels (iptables):"
+          sudo iptables -L -n -v
+        shell: bash
 
-      # 11. Deploy Docker Stack
-      - name: Deploy Docker Stack
-        uses: appleboy/ssh-action@v0.1.7
-        with:
-          host: ${{ secrets.SWARM_HOST }}
-          username: swarm_user
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            set -x
-            cd ~/repos/infrastructure  
-            docker stack deploy -c docker-compose.yml infrastructure_stack
+      # 4. Controleer open poorten en luisterende services
+      - name: Open Ports and Listening Services
+        run: |
+          set -x
+          echo "[INFO] Luisterende poorten:"
+          sudo netstat -tulpn
+        shell: bash
+
+      # 5. Pakketbeheer en geïnstalleerde pakketten
+      - name: Installed Packages
+        run: |
+          set -x
+          echo "[INFO] Geïnstalleerde pakketten (apt):"
+          dpkg -l
+        shell: bash
+
+      # 6. Controleer of bepaalde tools beschikbaar zijn
+      - name: Check Available Tools
+        run: |
+          set -x
+          echo "[INFO] Controleer of essentiële tools beschikbaar zijn:"
+          which ssh
+          which ssh-agent
+          which docker
+          which ansible
+          which terraform
+        shell: bash
+
+      # 7. Diskruimte en schijfindeling
+      - name: Disk Usage and Layout
+        run: |
+          set -x
+          echo "[INFO] Schijfruimte gebruik:"
+          df -h
+          echo "[INFO] Schijfindeling:"
+          lsblk
+        shell: bash
+
+      # 8. Processen die draaien op de runner
+      - name: Running Processes
+        run: |
+          set -x
+          echo "[INFO] Actieve processen:"
+          ps aux
+        shell: bash
+
+      # 9. Controleer of de runner internettoegang heeft
+      - name: Internet Connectivity Test
+        run: |
+          set -x
+          echo "[INFO] Test internetconnectiviteit:"
+          ping -c 4 8.8.8.8 || echo "[ERROR] Kan 8.8.8.8 niet bereiken"
+          ping -c 4 google.com || echo "[ERROR] Kan google.com niet bereiken"
+          curl -I https://www.google.com || echo "[ERROR] Kan geen HTTPS-verbinding maken met google.com"
+        shell: bash
+
+      # 10. Log bestanden bekijken (optioneel)
+      - name: View Log Files
+        run: |
+          set -x
+          echo "[INFO] Laatste systeemlogs:"
+          sudo tail -n 100 /var/log/syslog
+        shell: bash
+
+      # 11. Omgevingsvariabelen specifiek voor GitHub Actions
+      - name: GitHub Actions Environment Variables
+        run: |
+          set -x
+          echo "[INFO] GitHub Actions specifieke omgevingsvariabelen:"
+          env | grep GITHUB_
+        shell: bash
+
+      # 12. Netwerk testen naar doelserver (zonder ping)
+      - name: Network Test to Target Server
+        run: |
+          set -x
+          echo "[INFO] Test netwerkconnectiviteit naar doelserver:"
+          traceroute ${{ secrets.SWARM_HOST }} || echo "[ERROR] Traceroute naar doelserver mislukt"
+          nc -vz ${{ secrets.SWARM_HOST }} 22 || echo "[ERROR] Kan geen verbinding maken met poort 22 op doelserver"
+        shell: bash
+
+      # 13. Check Docker Swarm status (indien relevant)
+      - name: Docker Swarm Status
+        run: |
+          set -x
+          echo "[INFO] Docker Swarm status:"
+          docker info | grep -i swarm
+        shell: bash
+
+      # 14. Controleer hosts file
+      - name: Hosts File
+        run: |
+          set -x
+          echo "[INFO] /etc/hosts inhoud:"
+          cat /etc/hosts
+        shell: bash
 
