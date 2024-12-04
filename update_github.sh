@@ -61,4 +61,3 @@ echo ""
 
 # Einde
 echo "===== Update voltooid ====="
-
