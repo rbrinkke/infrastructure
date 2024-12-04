@@ -29,14 +29,12 @@ jobs:
           terraform_version: 1.4.0
 
       - name: Terraform Init
-        run: |
-          terraform init
+        run: terraform init
         working-directory: ./terraform
         shell: bash
 
       - name: Terraform Apply
-        run: |
-          terraform apply -auto-approve
+        run: terraform apply -auto-approve
         working-directory: ./terraform
         shell: bash
 
