@@ -27,7 +27,7 @@ jobs:
           echo "[DEBUG] Validating private key with ssh-keygen..."
           ssh-keygen -lf ~/.ssh/id_ed25519 || echo "[ERROR] Private key lijkt niet geldig!"
 
-      # 3. Controleer bereikbaarheid en poort 22
+      # 3. Controleer netwerkconnectiviteit en poort 22
       - name: Network Connectivity Test
         run: |
           set -x
@@ -36,7 +36,18 @@ jobs:
           echo "[DEBUG] Checking SSH port (22) availability..."
           nc -zv 192.168.178.183 22 || echo "[ERROR] SSH port is not open!"
 
-      # 4. Controleer SSH-sleutel en permissies op de runner
+      # 4. Debug Runner Netwerkomgeving
+      - name: Debug Runner Network Environment
+        run: |
+          set -x
+          echo "[DEBUG] Checking runner network environment..."
+          ip addr
+          echo "[DEBUG] Checking routing table..."
+          ip route
+          echo "[DEBUG] Checking Docker network (if applicable)..."
+          docker network ls || echo "Docker not available."
+
+      # 5. Controleer SSH-sleutel en permissies op de runner
       - name: Validate Runner SSH Environment
         run: |
           set -x
@@ -44,14 +55,14 @@ jobs:
           ls -la ~/.ssh/
           ssh-keygen -lf ~/.ssh/id_ed25519 || echo "[ERROR] SSH key validation failed!"
 
-      # 5. Test SSH-verbinding met uitgebreide debugging
+      # 6. Test SSH-verbinding met uitgebreide debugging
       - name: Test SSH Connection
         run: |
           set -x
           echo "[DEBUG] Attempting SSH connection to 192.168.178.183..."
-          ssh -vvv -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/id_ed25519 swarm_user@192.168.178.183 "echo 'SSH connection successful!' && uptime && whoami"
+          ssh -vvv -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/id_ed25519 swarm_user@192.168.178.183 "echo 'SSH connection successful!' && uptime && whoami" || echo "[ERROR] SSH connection failed!"
 
-      # 6. Voeg extra debugging toe als de verbinding mislukt
+      # 7. Voeg extra debugging toe als de verbinding mislukt
       - name: Debug SSH Failure
         if: failure()
         run: |
@@ -63,4 +74,6 @@ jobs:
           ps aux | grep ssh || echo "[ERROR] No SSH processes running."
           echo "[DEBUG] Showing SSH agent info (if available):"
           ssh-add -l || echo "[ERROR] No SSH agent running."
+          echo "[DEBUG] Showing system firewall status (if applicable):"
+          sudo ufw status || echo "Firewall not active or not accessible."
 
