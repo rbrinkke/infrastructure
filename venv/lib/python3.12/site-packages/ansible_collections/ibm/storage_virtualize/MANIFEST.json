@@ -1,0 +1,33 @@
+{
+ "collection_info": {
+  "namespace": "ibm",
+  "name": "storage_virtualize",
+  "version": "2.2.0",
+  "authors": [
+   "Sumit Kumar Gupta (github.com/sumitguptaibm)",
+   "Lavanya C R (github.com/lavanyacr)"
+  ],
+  "readme": "README.md",
+  "tags": [
+   "storage",
+   "flashsystem",
+   "ibmsvc"
+  ],
+  "description": "Ansible Collections for IBM Storage Virtualize",
+  "license": [],
+  "license_file": "LICENSE",
+  "dependencies": {},
+  "repository": "https://github.com/ansible-collections/ibm.storage_virtualize",
+  "documentation": null,
+  "homepage": "https://github.com/ansible-collections/ibm.storage_virtualize",
+  "issues": "https://github.com/ansible-collections/ibm.storage_virtualize/issues"
+ },
+ "file_manifest_file": {
+  "name": "FILES.json",
+  "ftype": "file",
+  "chksum_type": "sha256",
+  "chksum_sha256": "7f14a6f98ab4fbe89b7e7c7bb56608cd98f6602f05f29d27c80edf2ca6000f5e",
+  "format": 1
+ },
+ "format": 1
+}
