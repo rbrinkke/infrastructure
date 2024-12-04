@@ -39,7 +39,7 @@ jobs:
         with:
           terraform_version: 1.4.0
 
-      # Install Node.js (toegevoegd stap)
+      # Install Node.js (indien nodig)
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
@@ -55,13 +55,30 @@ jobs:
         run: terraform apply -auto-approve
         working-directory: ./terraform
 
+      # Debugging: Controleer Permissies en Eigenaarschap
+      - name: SSH Debug Permissions
+        run: |
+          ssh -o StrictHostKeyChecking=no swarm_user@${{ secrets.SWARM_HOST }} "
+            echo 'Huidige gebruiker:' && whoami &&
+            echo 'Huidige directory:' && pwd &&
+            echo 'Controleer permissies van ansible directory:' &&
+            ls -ld /home/rob/repos/infrastructure/ansible &&
+            ls -l /home/rob/repos/infrastructure/ansible
+          "
+
       # Run Ansible Playbook
       - name: Run Ansible Playbook
         run: |
-          ssh -o StrictHostKeyChecking=no swarm_user@${{ secrets.SWARM_HOST }} "cd /home/rob/repos/infrastructure/ansible && ansible-playbook playbook.yml -i inventory.yml"
+          ssh -o StrictHostKeyChecking=no swarm_user@${{ secrets.SWARM_HOST }} "
+            cd /home/rob/repos/infrastructure/ansible &&
+            ansible-playbook playbook.yml -i inventory.yml
+          "
 
       # Deploy Docker stack
       - name: Deploy Docker Stack
         run: |
-          ssh -o StrictHostKeyChecking=no swarm_user@${{ secrets.SWARM_HOST }} "cd /home/rob/repos/infrastructure && docker stack deploy -c docker-compose.yml infrastructure_stack"
+          ssh -o StrictHostKeyChecking=no swarm_user@${{ secrets.SWARM_HOST }} "
+            cd /home/rob/repos/infrastructure &&
+            docker stack deploy -c docker-compose.yml infrastructure_stack
+          "
 
