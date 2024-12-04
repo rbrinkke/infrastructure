@@ -1,4 +1,4 @@
-name: Runner Diagnostics
+name: CI/CD Workflow
 
 on:
   push:
@@ -6,129 +6,119 @@ on:
       - main
 
 jobs:
-  diagnose_runner:
+  deploy:
     runs-on: self-hosted
 
     steps:
-      # 1. Basisinformatie over de runner
-      - name: Runner Info
+      # 1. Checkout de repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # 2. Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18.x'
+
+      - name: Verify Node.js Installation
         run: |
           set -x
-          echo "[INFO] Systeeminformatie:"
-          uname -a
-          echo "[INFO] Huidige gebruiker:"
-          whoami
-          echo "[INFO] Home directory:"
-          echo $HOME
-          echo "[INFO] Omgevingsvariabelen:"
-          env
+          echo "[DEBUG] Node.js en npm versies:"
+          node -v
+          npm -v
+
+      # 3. Login bij Docker Hub
+      - name: Login to Docker Hub
+        run: |
+          set -x
+          echo "[DEBUG] Logging in to Docker Hub"
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      # 4. Initialiseer Docker Swarm
+      - name: Initialize Docker Swarm
+        run: |
+          set -x
+          echo "[DEBUG] Initializing Docker Swarm"
+          docker swarm init || echo "Docker Swarm is mogelijk al geïnitialiseerd"
+
+      # 5. Terraform configureren
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.4.0
+
+      - name: Terraform Init
+        run: |
+          set -x
+          echo "[DEBUG] Initializing Terraform"
+          terraform init
+        working-directory: ./terraform
+
+      - name: Terraform Apply
+        run: |
+          set -x
+          echo "[DEBUG] Applying Terraform configuration"
+          terraform apply -auto-approve
+        working-directory: ./terraform
+
+      # 6. Stel SSH-sleutel in met debugging
+      - name: Setup SSH Key
+        run: |
+          set -x  # Debugmodus aan
+          echo "[DEBUG] Creating SSH key directory..."
+          mkdir -p /home/rob/.ssh
+          echo "${{ secrets.SSH_KEY }}" | tr -d '\r' > /home/rob/.ssh/id_rsa
+          chmod 600 /home/rob/.ssh/id_rsa
+          chown rob:rob /home/rob/.ssh/id_rsa
+          echo "[DEBUG] Verifying SSH key permissions..."
+          ls -l /home/rob/.ssh/id_rsa || echo "[ERROR] Key not found!"
+          echo "[DEBUG] Validating private key with ssh-keygen..."
+          ssh-keygen -lf /home/rob/.ssh/id_rsa || echo "[ERROR] Private key lijkt niet geldig!"
         shell: bash
 
-      # 2. Netwerkconfiguratie inspecteren
-      - name: Network Configuration
+      # 7. Voeg server toe aan known_hosts
+      - name: Add server to known_hosts
         run: |
-          set -x
-          echo "[INFO] Netwerkinterfaces en IP-adressen:"
-          ip addr show
-          echo "[INFO] Routing tabel:"
-          ip route
-          echo "[INFO] DNS resolvers:"
-          cat /etc/resolv.conf
+          ssh-keyscan -H ${{ secrets.SWARM_HOST }} >> /home/rob/.ssh/known_hosts
         shell: bash
 
-      # 3. Controleer of 'ss' beschikbaar is
-      - name: Check 'ss' Command Availability
+      # 8. Controleer bereikbaarheid en poort 22
+      - name: Network Connectivity Test
         run: |
           set -x
-          if command -v ss > /dev/null; then
-            echo "[INFO] 'ss' command is available."
-          else
-            echo "[ERROR] 'ss' command is not available."
-          fi
+          echo "[DEBUG] Testing connectivity to ${{ secrets.SWARM_HOST }}..."
+          ping -c 4 ${{ secrets.SWARM_HOST }} || echo "[ERROR] Server is not reachable!"
+          echo "[DEBUG] Checking SSH port (22) availability..."
+          nc -zv ${{ secrets.SWARM_HOST }} 22 || echo "[ERROR] SSH port is not open!"
         shell: bash
 
-      # 4. Open poorten en luisterende services
-      - name: Open Ports and Listening Services
+      # 9. Test SSH-verbinding met uitgebreide debugging
+      - name: Test SSH Connection
         run: |
           set -x
-          echo "[INFO] Luisterende poorten:"
-          ss -tulpn || echo "[ERROR] 'ss' commando niet beschikbaar"
+          echo "[DEBUG] Attempting SSH connection to ${{ secrets.SWARM_HOST }}..."
+          ssh -vvv -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i /home/rob/.ssh/id_rsa swarm_user@${{ secrets.SWARM_HOST }} <<EOF
+            echo "Welcome to SSH Debug Test!"
+            uptime
+            whoami
+            exit
+EOF
+          echo "[DEBUG] SSH connection test complete."
         shell: bash
 
-      # 5. Controleer beschikbare tools
-      - name: Check Available Tools
+      # 10. Voer Ansible playbook uit
+      - name: Run Ansible Playbook
         run: |
           set -x
-          echo "[INFO] Beschikbare tools:"
-          which ssh || echo "ssh niet gevonden"
-          which docker || echo "docker niet gevonden"
-          which ansible || echo "ansible niet gevonden"
-          which terraform || echo "terraform niet gevonden"
+          cd ~/repos/infrastructure/ansible
+          ansible-playbook playbook.yml -i inventory.yml
         shell: bash
 
-      # 6. Controleer actieve processen
-      - name: Running Processes
+      # 11. Deploy Docker Stack
+      - name: Deploy Docker Stack
         run: |
           set -x
-          echo "[INFO] Actieve processen:"
-          ps aux
-        shell: bash
-
-      # 7. Internetconnectiviteitstest
-      - name: Internet Connectivity Test
-        run: |
-          set -x
-          echo "[INFO] Test internetconnectiviteit:"
-          ping -c 4 8.8.8.8 || echo "[ERROR] Kan 8.8.8.8 niet bereiken"
-          ping -c 4 google.com || echo "[ERROR] Kan google.com niet bereiken"
-          curl -I https://www.google.com || echo "[ERROR] Kan geen HTTPS-verbinding maken met google.com"
-        shell: bash
-
-      # 8. Ping naar doelserver
-      - name: Ping Target Server
-        run: |
-          set -x
-          echo "[INFO] Pingen naar doelserver..."
-          ping -c 4 ${{ secrets.SWARM_HOST }} || echo "[ERROR] Kan doelserver niet bereiken"
-        shell: bash
-
-      # 9. DNS-resolutie test
-      - name: DNS Resolution Test
-        run: |
-          set -x
-          echo "[INFO] DNS-resolutie test voor doelserver..."
-          nslookup ${{ secrets.SWARM_HOST }} || echo "[ERROR] Kan hostnaam niet resolven"
-        shell: bash
-
-      # 10. Traceroute naar doelserver
-      - name: Traceroute to Target Server
-        run: |
-          set -x
-          echo "[INFO] Traceroute naar doelserver..."
-          traceroute ${{ secrets.SWARM_HOST }} || echo "[ERROR] Traceroute mislukt"
-        shell: bash
-
-      # 11. Controleer SSH-poort op doelserver
-      - name: Check SSH Port
-        run: |
-          set -x
-          echo "[INFO] Controleer of poort 22 open is op de doelserver..."
-          nc -zv ${{ secrets.SWARM_HOST }} 22 || echo "[ERROR] Poort 22 is niet bereikbaar"
-        shell: bash
-
-      # 12. Firewall-instellingen op de runner
-      - name: Firewall Rules
-        run: |
-          set -x
-          echo "[INFO] Firewall regels:"
-          sudo iptables -L -n -v
-        shell: bash
-
-      # 13. Controleer hosts file
-      - name: Hosts File
-        run: |
-          set -x
-          echo "[INFO] /etc/hosts inhoud:"
-          cat /etc/hosts
+          cd ~/repos/infrastructure
+          docker stack deploy -c docker-compose.yml infrastructure_stack
         shell: bash
 
