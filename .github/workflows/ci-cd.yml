@@ -17,7 +17,7 @@ jobs:
       # 2. Stel SSH-sleutel in met debugging
       - name: Setup SSH Key
         run: |
-          set -x  # Debugmodus aan
+          set -x
           echo "[DEBUG] Creating SSH key directory..."
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
@@ -43,19 +43,13 @@ jobs:
           echo "[DEBUG] Validating SSH environment on the runner..."
           ls -la ~/.ssh/
           ssh-keygen -lf ~/.ssh/id_ed25519 || echo "[ERROR] SSH key validation failed!"
-          echo "[DEBUG] Verifying SSH config..."
-          cat /etc/ssh/ssh_config || echo "[ERROR] Unable to read SSH config!"
 
       # 5. Test SSH-verbinding met uitgebreide debugging
       - name: Test SSH Connection
         run: |
           set -x
           echo "[DEBUG] Attempting SSH connection to 192.168.178.183..."
-          ssh -vvv -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/id_ed25519 swarm_user@192.168.178.183 <<EOF
-            echo "SSH connection successful!"
-            uptime
-            whoami
-EOF
+          ssh -vvv -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/id_ed25519 swarm_user@192.168.178.183 "echo 'SSH connection successful!' && uptime && whoami"
 
       # 6. Voeg extra debugging toe als de verbinding mislukt
       - name: Debug SSH Failure
