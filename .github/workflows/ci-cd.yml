@@ -7,13 +7,18 @@ on:
 
 jobs:
   deploy:
-    # Gebruik je self-hosted runner
     runs-on: self-hosted
 
     steps:
       # Check out the repository code
       - name: Checkout Code
         uses: actions/checkout@v3
+
+      # Set up SSH Agent
+      - name: Setup SSH Agent
+        uses: webfactory/ssh-agent@v0.5.4
+        with:
+          ssh-private-key: ${{ secrets.SSH_KEY }}
 
       # Log in to Docker Hub
       - name: Login to Docker Hub
@@ -34,6 +39,12 @@ jobs:
         with:
           terraform_version: 1.4.0
 
+      # Install Node.js (toegevoegd stap)
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16' # Pas aan naar de vereiste versie
+
       # Initialize Terraform
       - name: Terraform Init
         run: terraform init
@@ -44,25 +55,13 @@ jobs:
         run: terraform apply -auto-approve
         working-directory: ./terraform
 
-      # Run Ansible playbook
+      # Run Ansible Playbook
       - name: Run Ansible Playbook
-        uses: appleboy/ssh-action@v0.1.5
-        with:
-          host: ${{ secrets.SWARM_HOST }}
-          username: swarm_user
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            cd /home/rob/repos/infrastructure/ansible
-            ansible-playbook playbook.yml -i inventory.yml
+        run: |
+          ssh -o StrictHostKeyChecking=no swarm_user@${{ secrets.SWARM_HOST }} "cd /home/rob/repos/infrastructure/ansible && ansible-playbook playbook.yml -i inventory.yml"
 
       # Deploy Docker stack
       - name: Deploy Docker Stack
-        uses: appleboy/ssh-action@v0.1.5
-        with:
-          host: ${{ secrets.SWARM_HOST }}
-          username: swarm_user
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            cd /home/rob/repos/infrastructure
-            docker stack deploy -c docker-compose.yml infrastructure_stack
+        run: |
+          ssh -o StrictHostKeyChecking=no swarm_user@${{ secrets.SWARM_HOST }} "cd /home/rob/repos/infrastructure && docker stack deploy -c docker-compose.yml infrastructure_stack"
 
