@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout de repository in de standaard werkdirectory van GitHub Actions
+      # Checkout de repository
       - name: Checkout Repository
         uses: actions/checkout@v3
 
@@ -20,7 +20,6 @@ jobs:
         with:
           node-version: '18.x'
 
-      # Verifieer Node.js installatie
       - name: Verify Node.js Installation
         run: |
           node -v
@@ -41,12 +40,10 @@ jobs:
         with:
           terraform_version: 1.4.0
 
-      # Initialiseer Terraform
       - name: Terraform Init
         run: terraform init
         working-directory: ./terraform
 
-      # Pas Terraform toe
       - name: Terraform Apply
         run: terraform apply -auto-approve
         working-directory: ./terraform
@@ -54,14 +51,20 @@ jobs:
       # Stel SSH-sleutel in
       - name: Setup SSH Key
         run: |
+          set -x  # Zet debugmodus aan
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          echo "[DEBUG] Private key permissions:"
+          ls -l ~/.ssh/id_ed25519
+          ssh-keygen -lf ~/.ssh/id_ed25519 || echo "[ERROR] Sleutel lijkt niet geldig"
 
       # Test SSH-verbinding
       - name: Test SSH Connection
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 swarm_user@${{ secrets.SWARM_HOST }} "echo 'SSH verbinding succesvol'"
+          set -x
+          echo "[DEBUG] Start SSH connection test"
+          ssh -vvv -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 swarm_user@${{ secrets.SWARM_HOST }} "echo 'SSH verbinding succesvol'" || echo "[ERROR] SSH connection failed"
 
       # Voer Ansible playbook uit
       - name: Run Ansible Playbook
@@ -71,6 +74,7 @@ jobs:
           username: swarm_user
           key: ${{ secrets.SSH_KEY }}
           script: |
+            set -x
             cd ~/repos/infrastructure/ansible
             ansible-playbook playbook.yml -i inventory.yml
 
@@ -82,6 +86,7 @@ jobs:
           username: swarm_user
           key: ${{ secrets.SSH_KEY }}
           script: |
+            set -x
             cd ~/repos/infrastructure
             docker stack deploy -c docker-compose.yml infrastructure_stack
 
