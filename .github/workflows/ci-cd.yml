@@ -10,83 +10,59 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout de repository
+      # 1. Checkout de repository
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      # Installeer Node.js
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18.x'
-
-      - name: Verify Node.js Installation
-        run: |
-          node -v
-          npm -v
-
-      # Login bij Docker Hub
-      - name: Login to Docker Hub
-        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-
-      # Initialiseer Docker Swarm
-      - name: Initialize Docker Swarm
-        run: |
-          docker swarm init || echo "Docker Swarm is mogelijk al geïnitialiseerd"
-
-      # Terraform configureren
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.4.0
-
-      - name: Terraform Init
-        run: terraform init
-        working-directory: ./terraform
-
-      - name: Terraform Apply
-        run: terraform apply -auto-approve
-        working-directory: ./terraform
-
-      # Stel SSH-sleutel in
+      # 2. Stel SSH-sleutel in met debugging
       - name: Setup SSH Key
         run: |
-          set -x  # Zet debugmodus aan
+          set -x  # Debugmodus aan
+          echo "[DEBUG] Creating SSH key directory..."
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          echo "[DEBUG] Private key permissions:"
-          ls -l ~/.ssh/id_ed25519
-          ssh-keygen -lf ~/.ssh/id_ed25519 || echo "[ERROR] Sleutel lijkt niet geldig"
+          echo "[DEBUG] Verifying SSH key permissions..."
+          ls -l ~/.ssh/id_ed25519 || echo "[ERROR] Key not found!"
+          echo "[DEBUG] Validating private key with ssh-keygen..."
+          ssh-keygen -lf ~/.ssh/id_ed25519 || echo "[ERROR] Private key lijkt niet geldig!"
 
-      # Test SSH-verbinding
+      # 3. Controleer bereikbaarheid en poort 22
+      - name: Network Connectivity Test
+        run: |
+          set -x
+          echo "[DEBUG] Testing connectivity to ${{ secrets.SWARM_HOST }}..."
+          ping -c 4 ${{ secrets.SWARM_HOST }} || echo "[ERROR] Server is not reachable!"
+          echo "[DEBUG] Checking SSH port (22) availability..."
+          nc -zv ${{ secrets.SWARM_HOST }} 22 || echo "[ERROR] SSH port is not open!"
+
+      # 4. Test SSH-verbinding met uitgebreide debugging
       - name: Test SSH Connection
         run: |
           set -x
-          echo "[DEBUG] Start SSH connection test"
-          ssh -vvv -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 swarm_user@${{ secrets.SWARM_HOST }} "echo 'SSH verbinding succesvol'" || echo "[ERROR] SSH connection failed"
+          echo "[DEBUG] Attempting SSH connection to ${{ secrets.SWARM_HOST }}..."
+          ssh -vvv -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/id_ed25519 swarm_user@${{ secrets.SWARM_HOST }} <<EOF
+            echo "Welcome to SSH Debug Test!"
+            uptime
+            whoami
+            exit
+EOF
+          echo "[DEBUG] SSH connection test complete."
 
-      # Voer Ansible playbook uit
-      - name: Run Ansible Playbook
-        uses: appleboy/ssh-action@v0.1.3
-        with:
-          host: ${{ secrets.SWARM_HOST }}
-          username: swarm_user
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            set -x
-            cd ~/repos/infrastructure/ansible
-            ansible-playbook playbook.yml -i inventory.yml
+      # 5. Fallback-debugging als SSH faalt
+      - name: SSH Connection Fallback
+        if: failure()
+        run: |
+          echo "[ERROR] SSH connection failed. Debugging logs below:"
+          cat ~/.ssh/id_ed25519
+          echo "[INFO] Attempting alternate SSH commands..."
+          ssh -o BatchMode=no -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 swarm_user@${{ secrets.SWARM_HOST }} || echo "[ERROR] Alternate SSH attempt failed."
 
-      # Deploy Docker Stack
-      - name: Deploy Docker Stack
-        uses: appleboy/ssh-action@v0.1.3
-        with:
-          host: ${{ secrets.SWARM_HOST }}
-          username: swarm_user
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            set -x
-            cd ~/repos/infrastructure
-            docker stack deploy -c docker-compose.yml infrastructure_stack
+      # 6. Debug logging voor server logs (optioneel)
+      - name: Server Logs Debugging
+        run: |
+          ssh -i ~/.ssh/id_ed25519 swarm_user@${{ secrets.SWARM_HOST }} <<EOF
+            echo "[DEBUG] Server logs:"
+            sudo tail -n 20 /var/log/auth.log
+EOF
 
