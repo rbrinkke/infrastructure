@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: CI/CD Workflow
 
 on:
   push:
@@ -7,18 +7,9 @@ on:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v2
-
-      - name: Install unzip
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y unzip
-        shell: bash
-
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
@@ -28,45 +19,36 @@ jobs:
         run: |
           node -v
           npm -v
-        shell: bash
 
       - name: Login to Docker Hub
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-        shell: bash
 
       - name: Initialize Docker Swarm
         run: |
           docker swarm init || echo "Docker Swarm is mogelijk al geïnitialiseerd"
-        shell: bash
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.4.0
-          cli_config_credentials_hostname: app.terraform.io
-          terraform_wrapper: true
 
       - name: Terraform Init
         run: terraform init
         working-directory: ./terraform
-        shell: bash
 
       - name: Terraform Apply
         run: terraform apply -auto-approve
         working-directory: ./terraform
-        shell: bash
 
       - name: Setup SSH Key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-        shell: bash
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
 
       - name: Test SSH Connection
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa swarm_user@${{ secrets.SWARM_HOST }} "echo 'SSH verbinding succesvol'"
-        shell: bash
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 swarm_user@${{ secrets.SWARM_HOST }} "echo 'SSH verbinding succesvol'"
 
       - name: Run Ansible Playbook
         uses: appleboy/ssh-action@v0.1.3
