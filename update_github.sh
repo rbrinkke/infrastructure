@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # Controleer of een commitbericht is opgegeven
 if [ -z "$1" ]; then
   echo "Gebruik: $0 '<commit-bericht>'"
@@ -22,6 +21,17 @@ echo ""
 if [ ! -d "$REPO_PATH/.git" ]; then
   echo "ERROR: Dit is geen geldige Git-repository: $REPO_PATH"
   exit 1
+fi
+
+# Controleer en update remote URL indien nodig
+CURRENT_REMOTE=$(git remote get-url origin)
+if [[ $CURRENT_REMOTE == https://* ]]; then
+  echo "HTTPS URL gedetecteerd, converteren naar SSH..."
+  # Extract username and repo from HTTPS URL
+  REPO_NAME=$(echo $CURRENT_REMOTE | sed 's/.*github.com\/\(.*\)\.git/\1/')
+  git remote set-url origin "git@github.com:${REPO_NAME}.git"
+  echo "Remote URL geupdate naar: git@github.com:${REPO_NAME}.git"
+  echo ""
 fi
 
 # Stap 1: Controleer status
