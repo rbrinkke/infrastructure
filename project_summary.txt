@@ -1,15 +1,296 @@
-Project summary has been written to project_summary.txt
- 11:17:02
+Project Samenvatting - Thu Dec  5 08:12:30 AM UTC 2024
+====================================
 
-### File: README.md
----
+### ansible/inventory.yml
+Path: /home/rob/repos/infrastructure/ansible/inventory.yml
+------------------------------------
+
+all:
+  hosts:
+    swarm-manager:
+      ansible_host: 192.168.178.183
+      ansible_user: swarm_user
+
+====================================
+
+### ansible/playbook.yml
+Path: /home/rob/repos/infrastructure/ansible/playbook.yml
+------------------------------------
+
+- hosts: swarm-manager
+  become: yes
+  tasks:
+    - name: Get system information
+      shell: |
+        echo "Linux-$(uname -m)"
+      register: system_info
+
+    - name: Install Docker Compose
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-{{ system_info.stdout }}"
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+
+    - name: Configure Git safe directory
+      command: git config --global --add safe.directory /home/rob/repos/infrastructure
+      become_user: rob
+
+    - name: Clone repository
+      git:
+        repo: 'https://github.com/rbrinkke/infrastructure.git'
+        dest: /home/rob/repos/infrastructure
+        update: yes
+      become_user: rob
+
+    - name: Initialize Terraform
+      command: terraform init
+      args:
+        chdir: /home/rob/repos/infrastructure/terraform
+      become_user: rob
+
+    - name: Apply Terraform configuration
+      command: terraform apply -auto-approve
+      args:
+        chdir: /home/rob/repos/infrastructure/terraform
+      become_user: rob
+
+====================================
+
+### docker-compose.yml
+Path: /home/rob/repos/infrastructure/docker-compose.yml
+------------------------------------
+
+services:
+  web:
+    image: nginx:latest
+    ports:
+      - "8080:80"
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+====================================
+
+### Dockerfile
+Path: /home/rob/repos/infrastructure/Dockerfile
+------------------------------------
+
+# Gebruik het officiële Nginx image als basis
+FROM nginx:latest
+
+# Kopieer de aangepaste configuratie naar de container (optioneel)
+# COPY nginx.conf /etc/nginx/nginx.conf
+
+# Stel de werkdirectory in
+WORKDIR /usr/share/nginx/html
+
+# Kopieer statische bestanden naar de container (optioneel)
+# COPY . /usr/share/nginx/html
+
+# Exposeer poort 80
+EXPOSE 80
+
+# Start Nginx
+CMD ["nginx", "-g", "daemon off;"]
+
+
+====================================
+
+### fix_docker.log
+Path: /home/rob/repos/infrastructure/fix_docker.log
+------------------------------------
+
+===== Docker Permissions Fix Script =====
+Controleer of gebruiker in Docker-groep zit...
+✅ Gebruiker zit al in de Docker-groep.
+Controleer permissies van Docker-socket...
+✅ Docker-socket permissies zijn correct.
+🔄 Herstart Docker-service...
+🗑️ Container verwijderen (act-Build-and-Push-Docker-Image-build-6d38bd0a83bc4faeee92a765bea81f5a9596c047789317fc963f710552e027bf)...
+Error response from daemon: cannot remove container "/act-Build-and-Push-Docker-Image-build-6d38bd0a83bc4faeee92a765bea81f5a9596c047789317fc963f710552e027bf": could not kill: permission denied
+⚠️  Container verwijderen mislukt. Controleer handmatig.
+🗑️ Volume verwijderen (bea431e08c67f82db8b19d8800377aa6fb8fcd7547c334fe4d4405483fbcbb71)...
+Error response from daemon: volume bea431e08c67f82db8b19d8800377aa6fb8fcd7547c334fe4d4405483fbcbb71 not found
+⚠️  Volume verwijderen mislukt. Controleer handmatig.
+===== Alle stappen zijn uitgevoerd =====
+
+====================================
+
+### generate_project_summary.py
+Path: /home/rob/repos/infrastructure/generate_project_summary.py
+------------------------------------
+
+import os
+from datetime import datetime
+
+# Specificeer mappen en extensies die je relevant vindt
+relevant_directories = [
+    "ansible",
+    "services",
+    "terraform",
+]
+relevant_files = [
+    "docker-compose.yml",
+    "Dockerfile",
+    "README.md",
+    "update_github.sh",
+]
+exclude_directories = ["venv"]  # Uitsluiten om onnodige bestanden te vermijden
+
+# Output bestand
+output_file = "project_summary.txt"
+
+def gather_files(base_path, relevant_dirs, relevant_files, exclude_dirs):
+    collected_files = []
+    for root, dirs, files in os.walk(base_path):
+        # Filter ongewenste directories
+        dirs[:] = [d for d in dirs if d not in exclude_dirs]
+        
+        # Voeg specifieke bestanden toe
+        for file in files:
+            file_path = os.path.relpath(os.path.join(root, file), base_path)
+            if (
+                any(file_path.startswith(d) for d in relevant_dirs)  # Bestanden in relevante mappen
+                or file in relevant_files  # Specifieke bestanden
+            ):
+                collected_files.append(file_path)
+    return collected_files
+
+def write_summary(file_list, base_path, output_file):
+    with open(output_file, "w") as f:
+        # Tijd en datum van draaien
+        f.write(f"# Project Environment Summary\n")
+        f.write(f"# Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        
+        for file_path in file_list:
+            full_path = os.path.join(base_path, file_path)
+            f.write(f"### File: {file_path}\n")
+            f.write(f"---\n")
+            try:
+                with open(full_path, "r") as content_file:
+                    content = content_file.read()
+                    f.write(content + "\n")
+            except Exception as e:
+                f.write(f"[ERROR] Could not read file: {e}\n")
+            f.write("\n")
+
+if __name__ == "__main__":
+    base_path = os.getcwd()  # Gebruik de huidige werkdirectory
+    files_to_include = gather_files(base_path, relevant_directories, relevant_files, exclude_directories)
+    write_summary(files_to_include, base_path, output_file)
+    print(f"Project summary has been written to {output_file}")
+
+
+====================================
+
+### LICENSE
+Path: /home/rob/repos/infrastructure/LICENSE
+------------------------------------
+
+MIT License
+
+Copyright (c) 2024 rbrinkke
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+====================================
+
+### project_summary.txt
+Path: /home/rob/repos/infrastructure/project_summary.txt
+------------------------------------
+
+
+====================================
+
+### README.md
+Path: /home/rob/repos/infrastructure/README.md
+------------------------------------
+
 # infrastructureTesting CI/CD pipeline.
 
+====================================
 
-### File: update_github.sh
----
+### terraform/main.tf
+Path: /home/rob/repos/infrastructure/terraform/main.tf
+------------------------------------
+
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = ">= 2.13.0"
+    }
+  }
+}
+
+provider "docker" {
+  host = "unix:///var/run/docker.sock"
+}
+
+resource "docker_network" "webnet" {
+  name   = "webnet"
+  driver = "overlay"
+}
+
+resource "docker_network" "keycloak_network" {
+  name   = "keycloak_network"
+  driver = "overlay"
+}
+
+resource "docker_network" "monitoring_net" {
+  name   = "monitoring_net"
+  driver = "overlay"
+}
+
+
+====================================
+
+### terraform/outputs.tf
+Path: /home/rob/repos/infrastructure/terraform/outputs.tf
+------------------------------------
+
+output "webnet_id" {
+  value = docker_network.webnet.id
+}
+
+
+====================================
+
+### terraform/variables.tf
+Path: /home/rob/repos/infrastructure/terraform/variables.tf
+------------------------------------
+
+# Definieer hier variabelen die je nodig hebt
+variable "docker_host" {
+  description = "Docker host address"
+  default     = "unix:///var/run/docker.sock"
+}
+
+
+====================================
+
+### update_github.sh
+Path: /home/rob/repos/infrastructure/update_github.sh
+------------------------------------
+
 #!/bin/bash
-
 # Controleer of een commitbericht is opgegeven
 if [ -z "$1" ]; then
   echo "Gebruik: $0 '<commit-bericht>'"
@@ -32,6 +313,17 @@ echo ""
 if [ ! -d "$REPO_PATH/.git" ]; then
   echo "ERROR: Dit is geen geldige Git-repository: $REPO_PATH"
   exit 1
+fi
+
+# Controleer en update remote URL indien nodig
+CURRENT_REMOTE=$(git remote get-url origin)
+if [[ $CURRENT_REMOTE == https://* ]]; then
+  echo "HTTPS URL gedetecteerd, converteren naar SSH..."
+  # Extract username and repo from HTTPS URL
+  REPO_NAME=$(echo $CURRENT_REMOTE | sed 's/.*github.com\/\(.*\)\.git/\1/')
+  git remote set-url origin "git@github.com:${REPO_NAME}.git"
+  echo "Remote URL geupdate naar: git@github.com:${REPO_NAME}.git"
+  echo ""
 fi
 
 # Stap 1: Controleer status
@@ -72,1626 +364,5 @@ echo ""
 # Einde
 echo "===== Update voltooid ====="
 
-
-### File: docker-compose.yml
----
-services:
-  web:
-    image: nginx:latest
-    ports:
-      - "8080:80"
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-
-
-### File: Dockerfile
----
-# Gebruik het officiële Nginx image als basis
-FROM nginx:latest
-
-# Kopieer de aangepaste configuratie naar de container (optioneel)
-# COPY nginx.conf /etc/nginx/nginx.conf
-
-# Stel de werkdirectory in
-WORKDIR /usr/share/nginx/html
-
-# Kopieer statische bestanden naar de container (optioneel)
-# COPY . /usr/share/nginx/html
-
-# Exposeer poort 80
-EXPOSE 80
-
-# Start Nginx
-CMD ["nginx", "-g", "daemon off;"]
-
-
-
-### File: ansible/inventory.yml
----
-all:
-  hosts:
-    swarm-manager:
-      ansible_host: your_swarm_manager_ip
-      ansible_user: your_ssh_user
-      ansible_ssh_private_key_file: ~/.ssh/id_rsa
-
-
-
-### File: ansible/playbook.yml
----
-- hosts: swarm-manager
-  become: yes
-  tasks:
-    - name: Install Docker Compose
-      get_url:
-        url: https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-`uname -s`-`uname -m`
-        dest: /usr/local/bin/docker-compose
-        mode: '0755'
-
-    - name: Clone repository
-      git:
-        repo: 'https://github.com/yourusername/my-project.git'
-        dest: /home/youruser/my-project
-        update: yes
-
-    - name: Initialize Terraform
-      command: terraform init
-      args:
-        chdir: /home/youruser/my-project/terraform
-
-    - name: Apply Terraform configuration
-      command: terraform apply -auto-approve
-      args:
-        chdir: /home/youruser/my-project/terraform
-
-    - name: Run Ansible Playbook
-      command: ansible-playbook playbook.yml -i inventory.yml
-      args:
-        chdir: /home/youruser/my-project/ansible
-
-
-
-### File: .github/workflows/docker-compose.yml
----
----
-name: Build and Push Docker Image
-
-on:
-  workflow_dispatch:  # Trigger workflow manually
-
-jobs:
-  build:
-    runs-on: ubuntu-20.04  # Gebruik een stabiele versie om de waarschuwing te vermijden
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Install docker-compose
-        run: |
-          sudo curl -L \
-            "https://github.com/docker/compose/releases/download/v2.25.0/docker-compose-$(uname -s)-$(uname -m)" \
-            -o /usr/local/bin/docker-compose
-          sudo chmod +x /usr/local/bin/docker-compose
-          docker-compose version
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: "${{ secrets.DOCKER_USERNAME }}"
-          password: "${{ secrets.DOCKER_PASSWORD }}"
-
-      - name: Build and Push Docker Compose Image
-        run: |
-          docker-compose build && \
-          docker-compose push
-
-
-
-### File: terraform/terraform.tfstate.backup
----
-{
-  "version": 4,
-  "terraform_version": "1.6.0",
-  "serial": 4,
-  "lineage": "17ce5ceb-12f9-0547-8e6d-73b35880dd16",
-  "outputs": {
-    "webnet_id": {
-      "value": "wwsptx54l2bizgk1z3xj7a24z",
-      "type": "string"
-    }
-  },
-  "resources": [
-    {
-      "mode": "managed",
-      "type": "docker_network",
-      "name": "keycloak_network",
-      "provider": "provider[\"registry.terraform.io/kreuzwerker/docker\"]",
-      "instances": [
-        {
-          "schema_version": 1,
-          "attributes": {
-            "attachable": false,
-            "check_duplicate": null,
-            "driver": "overlay",
-            "id": "ull0ekr1yiqnm1mgf3msnqzg8",
-            "ingress": false,
-            "internal": false,
-            "ipam_config": [
-              {
-                "aux_address": {},
-                "gateway": "10.0.2.1",
-                "ip_range": "",
-                "subnet": "10.0.2.0/24"
-              }
-            ],
-            "ipam_driver": "default",
-            "ipam_options": null,
-            "ipv6": false,
-            "labels": [],
-            "name": "keycloak_network",
-            "options": {
-              "com.docker.network.driver.overlay.vxlanid_list": "4098"
-            },
-            "scope": "swarm"
-          },
-          "sensitive_attributes": [],
-          "private": "eyJzY2hlbWFfdmVyc2lvbiI6IjEifQ=="
-        }
-      ]
-    },
-    {
-      "mode": "managed",
-      "type": "docker_network",
-      "name": "monitoring_net",
-      "provider": "provider[\"registry.terraform.io/kreuzwerker/docker\"]",
-      "instances": [
-        {
-          "schema_version": 1,
-          "attributes": {
-            "attachable": false,
-            "check_duplicate": null,
-            "driver": "overlay",
-            "id": "bkxqum2ppz106fv98rp5zu90u",
-            "ingress": false,
-            "internal": false,
-            "ipam_config": [
-              {
-                "aux_address": {},
-                "gateway": "10.0.3.1",
-                "ip_range": "",
-                "subnet": "10.0.3.0/24"
-              }
-            ],
-            "ipam_driver": "default",
-            "ipam_options": null,
-            "ipv6": false,
-            "labels": [],
-            "name": "monitoring_net",
-            "options": {
-              "com.docker.network.driver.overlay.vxlanid_list": "4099"
-            },
-            "scope": "swarm"
-          },
-          "sensitive_attributes": [],
-          "private": "eyJzY2hlbWFfdmVyc2lvbiI6IjEifQ=="
-        }
-      ]
-    },
-    {
-      "mode": "managed",
-      "type": "docker_network",
-      "name": "webnet",
-      "provider": "provider[\"registry.terraform.io/kreuzwerker/docker\"]",
-      "instances": [
-        {
-          "schema_version": 1,
-          "attributes": {
-            "attachable": false,
-            "check_duplicate": null,
-            "driver": "overlay",
-            "id": "wwsptx54l2bizgk1z3xj7a24z",
-            "ingress": false,
-            "internal": false,
-            "ipam_config": [
-              {
-                "aux_address": {},
-                "gateway": "10.0.4.1",
-                "ip_range": "",
-                "subnet": "10.0.4.0/24"
-              }
-            ],
-            "ipam_driver": "default",
-            "ipam_options": null,
-            "ipv6": false,
-            "labels": [],
-            "name": "webnet",
-            "options": {
-              "com.docker.network.driver.overlay.vxlanid_list": "4100"
-            },
-            "scope": "swarm"
-          },
-          "sensitive_attributes": [],
-          "private": "eyJzY2hlbWFfdmVyc2lvbiI6IjEifQ=="
-        }
-      ]
-    }
-  ],
-  "check_results": null
-}
-
-
-### File: terraform/outputs.tf
----
-output "webnet_id" {
-  value = docker_network.webnet.id
-}
-
-
-
-### File: terraform/.terraform.lock.hcl
----
-# This file is maintained automatically by "terraform init".
-# Manual edits may be lost in future updates.
-
-provider "registry.terraform.io/kreuzwerker/docker" {
-  version     = "3.0.2"
-  constraints = ">= 2.0.0"
-  hashes = [
-    "h1:cT2ccWOtlfKYBUE60/v2/4Q6Stk1KYTNnhxSck+VPlU=",
-    "zh:15b0a2b2b563d8d40f62f83057d91acb02cd0096f207488d8b4298a59203d64f",
-    "zh:23d919de139f7cd5ebfd2ff1b94e6d9913f0977fcfc2ca02e1573be53e269f95",
-    "zh:38081b3fe317c7e9555b2aaad325ad3fa516a886d2dfa8605ae6a809c1072138",
-    "zh:4a9c5065b178082f79ad8160243369c185214d874ff5048556d48d3edd03c4da",
-    "zh:5438ef6afe057945f28bce43d76c4401254073de01a774760169ac1058830ac2",
-    "zh:60b7fadc287166e5c9873dfe53a7976d98244979e0ab66428ea0dea1ebf33e06",
-    "zh:61c5ec1cb94e4c4a4fb1e4a24576d5f39a955f09afb17dab982de62b70a9bdd1",
-    "zh:a38fe9016ace5f911ab00c88e64b156ebbbbfb72a51a44da3c13d442cd214710",
-    "zh:c2c4d2b1fd9ebb291c57f524b3bf9d0994ff3e815c0cd9c9bcb87166dc687005",
-    "zh:d567bb8ce483ab2cf0602e07eae57027a1a53994aba470fa76095912a505533d",
-    "zh:e83bf05ab6a19dd8c43547ce9a8a511f8c331a124d11ac64687c764ab9d5a792",
-    "zh:e90c934b5cd65516fbcc454c89a150bfa726e7cf1fe749790c7480bbeb19d387",
-    "zh:f05f167d2eaf913045d8e7b88c13757e3cf595dd5cd333057fdafc7c4b7fed62",
-    "zh:fcc9c1cea5ce85e8bcb593862e699a881bd36dffd29e2e367f82d15368659c3d",
-  ]
-}
-
-
-### File: terraform/terraform.tfstate
----
-{
-  "version": 4,
-  "terraform_version": "1.6.0",
-  "serial": 5,
-  "lineage": "17ce5ceb-12f9-0547-8e6d-73b35880dd16",
-  "outputs": {
-    "webnet_id": {
-      "value": "wwsptx54l2bizgk1z3xj7a24z",
-      "type": "string"
-    }
-  },
-  "resources": [
-    {
-      "mode": "managed",
-      "type": "docker_network",
-      "name": "keycloak_network",
-      "provider": "provider[\"registry.terraform.io/kreuzwerker/docker\"]",
-      "instances": [
-        {
-          "schema_version": 1,
-          "attributes": {
-            "attachable": false,
-            "check_duplicate": null,
-            "driver": "overlay",
-            "id": "ull0ekr1yiqnm1mgf3msnqzg8",
-            "ingress": false,
-            "internal": false,
-            "ipam_config": [
-              {
-                "aux_address": {},
-                "gateway": "10.0.2.1",
-                "ip_range": "",
-                "subnet": "10.0.2.0/24"
-              }
-            ],
-            "ipam_driver": "default",
-            "ipam_options": {},
-            "ipv6": false,
-            "labels": [],
-            "name": "keycloak_network",
-            "options": {
-              "com.docker.network.driver.overlay.vxlanid_list": "4098"
-            },
-            "scope": "swarm"
-          },
-          "sensitive_attributes": [],
-          "private": "eyJzY2hlbWFfdmVyc2lvbiI6IjEifQ=="
-        }
-      ]
-    },
-    {
-      "mode": "managed",
-      "type": "docker_network",
-      "name": "monitoring_net",
-      "provider": "provider[\"registry.terraform.io/kreuzwerker/docker\"]",
-      "instances": [
-        {
-          "schema_version": 1,
-          "attributes": {
-            "attachable": false,
-            "check_duplicate": null,
-            "driver": "overlay",
-            "id": "bkxqum2ppz106fv98rp5zu90u",
-            "ingress": false,
-            "internal": false,
-            "ipam_config": [
-              {
-                "aux_address": {},
-                "gateway": "10.0.3.1",
-                "ip_range": "",
-                "subnet": "10.0.3.0/24"
-              }
-            ],
-            "ipam_driver": "default",
-            "ipam_options": {},
-            "ipv6": false,
-            "labels": [],
-            "name": "monitoring_net",
-            "options": {
-              "com.docker.network.driver.overlay.vxlanid_list": "4099"
-            },
-            "scope": "swarm"
-          },
-          "sensitive_attributes": [],
-          "private": "eyJzY2hlbWFfdmVyc2lvbiI6IjEifQ=="
-        }
-      ]
-    },
-    {
-      "mode": "managed",
-      "type": "docker_network",
-      "name": "webnet",
-      "provider": "provider[\"registry.terraform.io/kreuzwerker/docker\"]",
-      "instances": [
-        {
-          "schema_version": 1,
-          "attributes": {
-            "attachable": false,
-            "check_duplicate": null,
-            "driver": "overlay",
-            "id": "wwsptx54l2bizgk1z3xj7a24z",
-            "ingress": false,
-            "internal": false,
-            "ipam_config": [
-              {
-                "aux_address": {},
-                "gateway": "10.0.4.1",
-                "ip_range": "",
-                "subnet": "10.0.4.0/24"
-              }
-            ],
-            "ipam_driver": "default",
-            "ipam_options": {},
-            "ipv6": false,
-            "labels": [],
-            "name": "webnet",
-            "options": {
-              "com.docker.network.driver.overlay.vxlanid_list": "4100"
-            },
-            "scope": "swarm"
-          },
-          "sensitive_attributes": [],
-          "private": "eyJzY2hlbWFfdmVyc2lvbiI6IjEifQ=="
-        }
-      ]
-    }
-  ],
-  "check_results": null
-}
-
-
-### File: terraform/main.tf
----
-terraform {
-  required_providers {
-    docker = {
-      source  = "kreuzwerker/docker"
-      version = ">= 2.13.0"
-    }
-  }
-}
-
-provider "docker" {
-  host = "unix:///var/run/docker.sock"
-}
-
-resource "docker_network" "webnet" {
-  name   = "webnet"
-  driver = "overlay"
-}
-
-resource "docker_network" "keycloak_network" {
-  name   = "keycloak_network"
-  driver = "overlay"
-}
-
-resource "docker_network" "monitoring_net" {
-  name   = "monitoring_net"
-  driver = "overlay"
-}
-
-
-
-### File: terraform/variables.tf
----
-# Definieer hier variabelen die je nodig hebt
-variable "docker_host" {
-  description = "Docker host address"
-  default     = "unix:///var/run/docker.sock"
-}
-
-
-
-### File: terraform/.terraform/providers/registry.terraform.io/kreuzwerker/docker/3.0.2/linux_amd64/LICENSE
----
-Mozilla Public License Version 2.0
-==================================
-
-1. Definitions
---------------
-
-1.1. "Contributor"
-    means each individual or legal entity that creates, contributes to
-    the creation of, or owns Covered Software.
-
-1.2. "Contributor Version"
-    means the combination of the Contributions of others (if any) used
-    by a Contributor and that particular Contributor's Contribution.
-
-1.3. "Contribution"
-    means Covered Software of a particular Contributor.
-
-1.4. "Covered Software"
-    means Source Code Form to which the initial Contributor has attached
-    the notice in Exhibit A, the Executable Form of such Source Code
-    Form, and Modifications of such Source Code Form, in each case
-    including portions thereof.
-
-1.5. "Incompatible With Secondary Licenses"
-    means
-
-    (a) that the initial Contributor has attached the notice described
-        in Exhibit B to the Covered Software; or
-
-    (b) that the Covered Software was made available under the terms of
-        version 1.1 or earlier of the License, but not also under the
-        terms of a Secondary License.
-
-1.6. "Executable Form"
-    means any form of the work other than Source Code Form.
-
-1.7. "Larger Work"
-    means a work that combines Covered Software with other material, in
-    a separate file or files, that is not Covered Software.
-
-1.8. "License"
-    means this document.
-
-1.9. "Licensable"
-    means having the right to grant, to the maximum extent possible,
-    whether at the time of the initial grant or subsequently, any and
-    all of the rights conveyed by this License.
-
-1.10. "Modifications"
-    means any of the following:
-
-    (a) any file in Source Code Form that results from an addition to,
-        deletion from, or modification of the contents of Covered
-        Software; or
-
-    (b) any new file in Source Code Form that contains any Covered
-        Software.
-
-1.11. "Patent Claims" of a Contributor
-    means any patent claim(s), including without limitation, method,
-    process, and apparatus claims, in any patent Licensable by such
-    Contributor that would be infringed, but for the grant of the
-    License, by the making, using, selling, offering for sale, having
-    made, import, or transfer of either its Contributions or its
-    Contributor Version.
-
-1.12. "Secondary License"
-    means either the GNU General Public License, Version 2.0, the GNU
-    Lesser General Public License, Version 2.1, the GNU Affero General
-    Public License, Version 3.0, or any later versions of those
-    licenses.
-
-1.13. "Source Code Form"
-    means the form of the work preferred for making modifications.
-
-1.14. "You" (or "Your")
-    means an individual or a legal entity exercising rights under this
-    License. For legal entities, "You" includes any entity that
-    controls, is controlled by, or is under common control with You. For
-    purposes of this definition, "control" means (a) the power, direct
-    or indirect, to cause the direction or management of such entity,
-    whether by contract or otherwise, or (b) ownership of more than
-    fifty percent (50%) of the outstanding shares or beneficial
-    ownership of such entity.
-
-2. License Grants and Conditions
---------------------------------
-
-2.1. Grants
-
-Each Contributor hereby grants You a world-wide, royalty-free,
-non-exclusive license:
-
-(a) under intellectual property rights (other than patent or trademark)
-    Licensable by such Contributor to use, reproduce, make available,
-    modify, display, perform, distribute, and otherwise exploit its
-    Contributions, either on an unmodified basis, with Modifications, or
-    as part of a Larger Work; and
-
-(b) under Patent Claims of such Contributor to make, use, sell, offer
-    for sale, have made, import, and otherwise transfer either its
-    Contributions or its Contributor Version.
-
-2.2. Effective Date
-
-The licenses granted in Section 2.1 with respect to any Contribution
-become effective for each Contribution on the date the Contributor first
-distributes such Contribution.
-
-2.3. Limitations on Grant Scope
-
-The licenses granted in this Section 2 are the only rights granted under
-this License. No additional rights or licenses will be implied from the
-distribution or licensing of Covered Software under this License.
-Notwithstanding Section 2.1(b) above, no patent license is granted by a
-Contributor:
-
-(a) for any code that a Contributor has removed from Covered Software;
-    or
-
-(b) for infringements caused by: (i) Your and any other third party's
-    modifications of Covered Software, or (ii) the combination of its
-    Contributions with other software (except as part of its Contributor
-    Version); or
-
-(c) under Patent Claims infringed by Covered Software in the absence of
-    its Contributions.
-
-This License does not grant any rights in the trademarks, service marks,
-or logos of any Contributor (except as may be necessary to comply with
-the notice requirements in Section 3.4).
-
-2.4. Subsequent Licenses
-
-No Contributor makes additional grants as a result of Your choice to
-distribute the Covered Software under a subsequent version of this
-License (see Section 10.2) or under the terms of a Secondary License (if
-permitted under the terms of Section 3.3).
-
-2.5. Representation
-
-Each Contributor represents that the Contributor believes its
-Contributions are its original creation(s) or it has sufficient rights
-to grant the rights to its Contributions conveyed by this License.
-
-2.6. Fair Use
-
-This License is not intended to limit any rights You have under
-applicable copyright doctrines of fair use, fair dealing, or other
-equivalents.
-
-2.7. Conditions
-
-Sections 3.1, 3.2, 3.3, and 3.4 are conditions of the licenses granted
-in Section 2.1.
-
-3. Responsibilities
--------------------
-
-3.1. Distribution of Source Form
-
-All distribution of Covered Software in Source Code Form, including any
-Modifications that You create or to which You contribute, must be under
-the terms of this License. You must inform recipients that the Source
-Code Form of the Covered Software is governed by the terms of this
-License, and how they can obtain a copy of this License. You may not
-attempt to alter or restrict the recipients' rights in the Source Code
-Form.
-
-3.2. Distribution of Executable Form
-
-If You distribute Covered Software in Executable Form then:
-
-(a) such Covered Software must also be made available in Source Code
-    Form, as described in Section 3.1, and You must inform recipients of
-    the Executable Form how they can obtain a copy of such Source Code
-    Form by reasonable means in a timely manner, at a charge no more
-    than the cost of distribution to the recipient; and
-
-(b) You may distribute such Executable Form under the terms of this
-    License, or sublicense it under different terms, provided that the
-    license for the Executable Form does not attempt to limit or alter
-    the recipients' rights in the Source Code Form under this License.
-
-3.3. Distribution of a Larger Work
-
-You may create and distribute a Larger Work under terms of Your choice,
-provided that You also comply with the requirements of this License for
-the Covered Software. If the Larger Work is a combination of Covered
-Software with a work governed by one or more Secondary Licenses, and the
-Covered Software is not Incompatible With Secondary Licenses, this
-License permits You to additionally distribute such Covered Software
-under the terms of such Secondary License(s), so that the recipient of
-the Larger Work may, at their option, further distribute the Covered
-Software under the terms of either this License or such Secondary
-License(s).
-
-3.4. Notices
-
-You may not remove or alter the substance of any license notices
-(including copyright notices, patent notices, disclaimers of warranty,
-or limitations of liability) contained within the Source Code Form of
-the Covered Software, except that You may alter any license notices to
-the extent required to remedy known factual inaccuracies.
-
-3.5. Application of Additional Terms
-
-You may choose to offer, and to charge a fee for, warranty, support,
-indemnity or liability obligations to one or more recipients of Covered
-Software. However, You may do so only on Your own behalf, and not on
-behalf of any Contributor. You must make it absolutely clear that any
-such warranty, support, indemnity, or liability obligation is offered by
-You alone, and You hereby agree to indemnify every Contributor for any
-liability incurred by such Contributor as a result of warranty, support,
-indemnity or liability terms You offer. You may include additional
-disclaimers of warranty and limitations of liability specific to any
-jurisdiction.
-
-4. Inability to Comply Due to Statute or Regulation
----------------------------------------------------
-
-If it is impossible for You to comply with any of the terms of this
-License with respect to some or all of the Covered Software due to
-statute, judicial order, or regulation then You must: (a) comply with
-the terms of this License to the maximum extent possible; and (b)
-describe the limitations and the code they affect. Such description must
-be placed in a text file included with all distributions of the Covered
-Software under this License. Except to the extent prohibited by statute
-or regulation, such description must be sufficiently detailed for a
-recipient of ordinary skill to be able to understand it.
-
-5. Termination
---------------
-
-5.1. The rights granted under this License will terminate automatically
-if You fail to comply with any of its terms. However, if You become
-compliant, then the rights granted under this License from a particular
-Contributor are reinstated (a) provisionally, unless and until such
-Contributor explicitly and finally terminates Your grants, and (b) on an
-ongoing basis, if such Contributor fails to notify You of the
-non-compliance by some reasonable means prior to 60 days after You have
-come back into compliance. Moreover, Your grants from a particular
-Contributor are reinstated on an ongoing basis if such Contributor
-notifies You of the non-compliance by some reasonable means, this is the
-first time You have received notice of non-compliance with this License
-from such Contributor, and You become compliant prior to 30 days after
-Your receipt of the notice.
-
-5.2. If You initiate litigation against any entity by asserting a patent
-infringement claim (excluding declaratory judgment actions,
-counter-claims, and cross-claims) alleging that a Contributor Version
-directly or indirectly infringes any patent, then the rights granted to
-You by any and all Contributors for the Covered Software under Section
-2.1 of this License shall terminate.
-
-5.3. In the event of termination under Sections 5.1 or 5.2 above, all
-end user license agreements (excluding distributors and resellers) which
-have been validly granted by You or Your distributors under this License
-prior to termination shall survive termination.
-
-************************************************************************
-*                                                                      *
-*  6. Disclaimer of Warranty                                           *
-*  -------------------------                                           *
-*                                                                      *
-*  Covered Software is provided under this License on an "as is"       *
-*  basis, without warranty of any kind, either expressed, implied, or  *
-*  statutory, including, without limitation, warranties that the       *
-*  Covered Software is free of defects, merchantable, fit for a        *
-*  particular purpose or non-infringing. The entire risk as to the     *
-*  quality and performance of the Covered Software is with You.        *
-*  Should any Covered Software prove defective in any respect, You     *
-*  (not any Contributor) assume the cost of any necessary servicing,   *
-*  repair, or correction. This disclaimer of warranty constitutes an   *
-*  essential part of this License. No use of any Covered Software is   *
-*  authorized under this License except under this disclaimer.         *
-*                                                                      *
-************************************************************************
-
-************************************************************************
-*                                                                      *
-*  7. Limitation of Liability                                          *
-*  --------------------------                                          *
-*                                                                      *
-*  Under no circumstances and under no legal theory, whether tort      *
-*  (including negligence), contract, or otherwise, shall any           *
-*  Contributor, or anyone who distributes Covered Software as          *
-*  permitted above, be liable to You for any direct, indirect,         *
-*  special, incidental, or consequential damages of any character      *
-*  including, without limitation, damages for lost profits, loss of    *
-*  goodwill, work stoppage, computer failure or malfunction, or any    *
-*  and all other commercial damages or losses, even if such party      *
-*  shall have been informed of the possibility of such damages. This   *
-*  limitation of liability shall not apply to liability for death or   *
-*  personal injury resulting from such party's negligence to the       *
-*  extent applicable law prohibits such limitation. Some               *
-*  jurisdictions do not allow the exclusion or limitation of           *
-*  incidental or consequential damages, so this exclusion and          *
-*  limitation may not apply to You.                                    *
-*                                                                      *
-************************************************************************
-
-8. Litigation
--------------
-
-Any litigation relating to this License may be brought only in the
-courts of a jurisdiction where the defendant maintains its principal
-place of business and such litigation shall be governed by laws of that
-jurisdiction, without reference to its conflict-of-law provisions.
-Nothing in this Section shall prevent a party's ability to bring
-cross-claims or counter-claims.
-
-9. Miscellaneous
-----------------
-
-This License represents the complete agreement concerning the subject
-matter hereof. If any provision of this License is held to be
-unenforceable, such provision shall be reformed only to the extent
-necessary to make it enforceable. Any law or regulation which provides
-that the language of a contract shall be construed against the drafter
-shall not be used to construe this License against a Contributor.
-
-10. Versions of the License
----------------------------
-
-10.1. New Versions
-
-Mozilla Foundation is the license steward. Except as provided in Section
-10.3, no one other than the license steward has the right to modify or
-publish new versions of this License. Each version will be given a
-distinguishing version number.
-
-10.2. Effect of New Versions
-
-You may distribute the Covered Software under the terms of the version
-of the License under which You originally received the Covered Software,
-or under the terms of any subsequent version published by the license
-steward.
-
-10.3. Modified Versions
-
-If you create software not governed by this License, and you want to
-create a new license for such software, you may create and use a
-modified version of this License if you rename the license and remove
-any references to the name of the license steward (except to note that
-such modified license differs from this License).
-
-10.4. Distributing Source Code Form that is Incompatible With Secondary
-Licenses
-
-If You choose to distribute Source Code Form that is Incompatible With
-Secondary Licenses under the terms of this version of the License, the
-notice described in Exhibit B of this License must be attached.
-
-Exhibit A - Source Code Form License Notice
--------------------------------------------
-
-  This Source Code Form is subject to the terms of the Mozilla Public
-  License, v. 2.0. If a copy of the MPL was not distributed with this
-  file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
-If it is not possible or desirable to put the notice in a particular
-file, then You may include the notice in a location (such as a LICENSE
-file in a relevant directory) where a recipient would be likely to look
-for such a notice.
-
-You may add additional accurate notices of copyright ownership.
-
-Exhibit B - "Incompatible With Secondary Licenses" Notice
----------------------------------------------------------
-
-  This Source Code Form is "Incompatible With Secondary Licenses", as
-  defined by the Mozilla Public License, v. 2.0.
-
-
-### File: terraform/.terraform/providers/registry.terraform.io/kreuzwerker/docker/3.0.2/linux_amd64/README.md
----
-<a href="https://docker.com">
-    <img src="https://raw.githubusercontent.com/kreuzwerker/terraform-provider-docker/master/assets/docker-logo.png" alt="Docker logo" title="Docker" align="right" height="100" />
-</a>
-<a href="https://terraform.io">
-    <img src="https://raw.githubusercontent.com/kreuzwerker/terraform-provider-docker/master/assets/terraform-logo.png" alt="Terraform logo" title="Terraform" align="right" height="100" />
-</a>
-<a href="https://kreuzwerker.de">
-    <img src="https://raw.githubusercontent.com/kreuzwerker/terraform-provider-docker/master/assets/xw-logo.png" alt="Kreuzwerker logo" title="Kreuzwerker" align="right" height="100" />
-</a>
-
-# Terraform Provider for Docker
-
-[![Release](https://img.shields.io/github/v/release/kreuzwerker/terraform-provider-docker)](https://github.com/kreuzwerker/terraform-provider-docker/releases)
-[![Installs](https://img.shields.io/badge/dynamic/json?logo=terraform&label=installs&query=$.data.attributes.downloads&url=https%3A%2F%2Fregistry.terraform.io%2Fv2%2Fproviders%2F713)](https://registry.terraform.io/providers/kreuzwerker/docker)
-[![Registry](https://img.shields.io/badge/registry-doc%40latest-lightgrey?logo=terraform)](https://registry.terraform.io/providers/kreuzwerker/docker/latest/docs)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/kreuzwerker/terraform-provider-docker/blob/main/LICENSE)  
-[![Go Status](https://github.com/kreuzwerker/terraform-provider-docker/workflows/Acc%20Tests/badge.svg)](https://github.com/kreuzwerker/terraform-provider-docker/actions)
-[![Lint Status](https://github.com/kreuzwerker/terraform-provider-docker/workflows/golangci-lint/badge.svg)](https://github.com/kreuzwerker/terraform-provider-docker/actions)
-[![Go Report Card](https://goreportcard.com/badge/github.com/kreuzwerker/terraform-provider-docker)](https://goreportcard.com/report/github.com/kreuzwerker/terraform-provider-docker)  
-
-## Documentation
-
-The documentation for the provider is available on the [Terraform Registry](https://registry.terraform.io/providers/kreuzwerker/docker/latest/docs).
-
-Do you want to migrate from `v2.x` to `v3.x`? Please read the [migration guide](docs/v2_v3_migration.md)
-
-## Example usage
-
-Take a look at the examples in the [documentation](https://registry.terraform.io/providers/kreuzwerker/docker/3.0.2/docs) of the registry
-or use the following example:
-
-
-```hcl
-# Set the required provider and versions
-terraform {
-  required_providers {
-    # We recommend pinning to the specific version of the Docker Provider you're using
-    # since new versions are released frequently
-    docker = {
-      source  = "kreuzwerker/docker"
-      version = "3.0.2"
-    }
-  }
-}
-
-# Configure the docker provider
-provider "docker" {
-}
-
-# Create a docker image resource
-# -> docker pull nginx:latest
-resource "docker_image" "nginx" {
-  name         = "nginx:latest"
-  keep_locally = true
-}
-
-# Create a docker container resource
-# -> same as 'docker run --name nginx -p8080:80 -d nginx:latest'
-resource "docker_container" "nginx" {
-  name    = "nginx"
-  image   = docker_image.nginx.image_id
-
-  ports {
-    external = 8080
-    internal = 80
-  }
-}
-
-# Or create a service resource
-# -> same as 'docker service create -d -p 8081:80 --name nginx-service --replicas 2 nginx:latest'
-resource "docker_service" "nginx_service" {
-  name = "nginx-service"
-  task_spec {
-    container_spec {
-      image = docker_image.nginx.repo_digest
-    }
-  }
-
-  mode {
-    replicated {
-      replicas = 2
-    }
-  }
-
-  endpoint_spec {
-    ports {
-      published_port = 8081
-      target_port    = 80
-    }
-  }
-}
-```
-
-## Building The Provider
-
-[Go](https://golang.org/doc/install) 1.18.x (to build the provider plugin)
-
-
-```sh
-$ git clone git@github.com:kreuzwerker/terraform-provider-docker
-$ make build
-```
-
-## Contributing
-
-The Terraform Docker Provider is the work of many of contributors. We appreciate your help!
-
-To contribute, please read the contribution guidelines: [Contributing to Terraform - Docker Provider](CONTRIBUTING.md)
-
-## License
-
-The Terraform Provider Docker is available to everyone under the terms of the Mozilla Public License Version 2.0. [Take a look the LICENSE file](LICENSE).
-
-
-## Stargazers over time
-
-[![Stargazers over time](https://starchart.cc/kreuzwerker/terraform-provider-docker.svg)](https://starchart.cc/kreuzwerker/terraform-provider-docker)
-
-
-### File: terraform/.terraform/providers/registry.terraform.io/kreuzwerker/docker/3.0.2/linux_amd64/CHANGELOG.md
----
-
-<a name="v3.0.2"></a>
-## [v3.0.2](https://github.com/kreuzwerker/terraform-provider-docker/compare/v3.0.1...v3.0.2) (2023-03-17)
-
-### Docs
-
-* correct spelling of "networks_advanced" ([#517](https://github.com/kreuzwerker/terraform-provider-docker/issues/517))
-
-### Fix
-
-* Implement proxy support. ([#529](https://github.com/kreuzwerker/terraform-provider-docker/issues/529))
-
-
-<a name="v3.0.1"></a>
-## [v3.0.1](https://github.com/kreuzwerker/terraform-provider-docker/compare/v3.0.0...v3.0.1) (2023-01-13)
-
-### Chore
-
-* Prepare release v3.0.1
-
-### Fix
-
-* Access health of container correctly. ([#506](https://github.com/kreuzwerker/terraform-provider-docker/issues/506))
-
-
-<a name="v3.0.0"></a>
-## [v3.0.0](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.25.0...v3.0.0) (2023-01-13)
-
-### Chore
-
-* Prepare release v3.0.0
-
-### Docs
-
-* Update documentation.
-* Add migration guide and update README ([#502](https://github.com/kreuzwerker/terraform-provider-docker/issues/502))
-
-### Feat
-
-* Prepare v3 release ([#503](https://github.com/kreuzwerker/terraform-provider-docker/issues/503))
-
-
-<a name="v2.25.0"></a>
-## [v2.25.0](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.24.0...v2.25.0) (2023-01-05)
-
-### Chore
-
-* Prepare release v2.25.0
-
-### Docs
-
-* Add documentation of remote hosts. ([#498](https://github.com/kreuzwerker/terraform-provider-docker/issues/498))
-
-### Feat
-
-* Migrate build block to `docker_image` ([#501](https://github.com/kreuzwerker/terraform-provider-docker/issues/501))
-* Add platform attribute to docker_image resource ([#500](https://github.com/kreuzwerker/terraform-provider-docker/issues/500))
-* Add sysctl implementation to container of docker_service. ([#499](https://github.com/kreuzwerker/terraform-provider-docker/issues/499))
-
-
-<a name="v2.24.0"></a>
-## [v2.24.0](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.23.1...v2.24.0) (2022-12-23)
-
-### Chore
-
-* Prepare release v2.24.0
-
-### Docs
-
-* Fix generated website.
-* Update command typo ([#487](https://github.com/kreuzwerker/terraform-provider-docker/issues/487))
-
-### Feat
-
-* cgroupns support ([#497](https://github.com/kreuzwerker/terraform-provider-docker/issues/497))
-* Add triggers attribute to docker_registry_image ([#496](https://github.com/kreuzwerker/terraform-provider-docker/issues/496))
-* Support registries with disabled auth ([#494](https://github.com/kreuzwerker/terraform-provider-docker/issues/494))
-* add IPAM options block for docker networks ([#491](https://github.com/kreuzwerker/terraform-provider-docker/issues/491))
-
-### Fix
-
-* Pin data source specific tag test to older tag.
-
-### Tests
-
-* Add test for parsing auth headers.
-
-
-<a name="v2.23.1"></a>
-## [v2.23.1](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.23.0...v2.23.1) (2022-11-23)
-
-### Chore
-
-* Prepare release v2.23.1
-
-### Fix
-
-* Update shasum of busybox:1.35.0 tag in test.
-* Handle Auth Header Scopes ([#482](https://github.com/kreuzwerker/terraform-provider-docker/issues/482))
-* Set OS_ARCH from GOHOSTOS and GOHOSTARCH ([#477](https://github.com/kreuzwerker/terraform-provider-docker/issues/477))
-
-
-<a name="v2.23.0"></a>
-## [v2.23.0](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.22.0...v2.23.0) (2022-11-02)
-
-### Chore
-
-* Prepare release v2.23.0
-
-### Feat
-
-* wait container healthy state ([#467](https://github.com/kreuzwerker/terraform-provider-docker/issues/467))
-* add docker logs data source ([#471](https://github.com/kreuzwerker/terraform-provider-docker/issues/471))
-
-### Fix
-
-* Update shasum of busybox:1.35.0 tag in test.
-* Update shasum of busybox:1.35.0 tag
-* Correct provider name to match the public registry ([#462](https://github.com/kreuzwerker/terraform-provider-docker/issues/462))
-
-
-<a name="v2.22.0"></a>
-## [v2.22.0](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.21.0...v2.22.0) (2022-09-20)
-
-### Chore
-
-* Prepare release v2.22.0
-
-### Feat
-
-* Configurable timeout for docker_container resource stateChangeConf ([#454](https://github.com/kreuzwerker/terraform-provider-docker/issues/454))
-
-### Fix
-
-* oauth authorization support for azurecr ([#451](https://github.com/kreuzwerker/terraform-provider-docker/issues/451))
-
-
-<a name="v2.21.0"></a>
-## [v2.21.0](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.20.3...v2.21.0) (2022-09-05)
-
-### Chore
-
-* Prepare release v2.21.0
-
-### Docs
-
-* Fix docker config example.
-
-### Feat
-
-* Add image_id attribute to docker_image resource. ([#450](https://github.com/kreuzwerker/terraform-provider-docker/issues/450))
-* Update used goversion to 1.18. ([#449](https://github.com/kreuzwerker/terraform-provider-docker/issues/449))
-
-### Fix
-
-* Replace deprecated .latest attribute with new image_id. ([#453](https://github.com/kreuzwerker/terraform-provider-docker/issues/453))
-* Remove reading part of docker_tag resource. ([#448](https://github.com/kreuzwerker/terraform-provider-docker/issues/448))
-* Fix repo_digest value for DockerImageDatasource test.
-
-
-<a name="v2.20.3"></a>
-## [v2.20.3](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.20.2...v2.20.3) (2022-08-31)
-
-### Chore
-
-* Prepare release v2.20.3
-
-### Fix
-
-* Docker Registry Image data source use HEAD request to query image digest ([#433](https://github.com/kreuzwerker/terraform-provider-docker/issues/433))
-* Adding Support for Windows Paths in Bash ([#438](https://github.com/kreuzwerker/terraform-provider-docker/issues/438))
-
-
-<a name="v2.20.2"></a>
-## [v2.20.2](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.20.1...v2.20.2) (2022-08-10)
-
-### Chore
-
-* Prepare release v2.20.2
-
-### Fix
-
-* Check the operating system for determining the default Docker socket ([#427](https://github.com/kreuzwerker/terraform-provider-docker/issues/427))
-
-### Reverts
-
-* fix(deps): update module github.com/golangci/golangci-lint to v1.48.0 ([#423](https://github.com/kreuzwerker/terraform-provider-docker/issues/423))
-
-
-<a name="v2.20.1"></a>
-## [v2.20.1](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.20.0...v2.20.1) (2022-08-10)
-
-### Chore
-
-* Prepare release v2.20.1
-* Reduce time to setup AccTests ([#430](https://github.com/kreuzwerker/terraform-provider-docker/issues/430))
-
-### Docs
-
-* Improve docker network usage documentation [skip-ci]
-
-### Feat
-
-* Implement triggers attribute for docker_image. ([#425](https://github.com/kreuzwerker/terraform-provider-docker/issues/425))
-
-### Fix
-
-* Add ForceTrue to docker_image name attribute. ([#421](https://github.com/kreuzwerker/terraform-provider-docker/issues/421))
-
-
-<a name="v2.20.0"></a>
-## [v2.20.0](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.19.0...v2.20.0) (2022-07-28)
-
-### Chore
-
-* Prepare release v2.20.0
-* Fix release targets in Makefile.
-
-### Feat
-
-* Implementation of `docker_tag` resource. ([#418](https://github.com/kreuzwerker/terraform-provider-docker/issues/418))
-* Implement support for insecure registries ([#414](https://github.com/kreuzwerker/terraform-provider-docker/issues/414))
-
-
-<a name="v2.19.0"></a>
-## [v2.19.0](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.18.1...v2.19.0) (2022-07-15)
-
-### Chore
-
-* Prepare release v2.19.0
-
-### Feat
-
-* Add gpu flag to docker_container resource ([#405](https://github.com/kreuzwerker/terraform-provider-docker/issues/405))
-
-### Fix
-
-* Enable authentication to multiple registries again. ([#400](https://github.com/kreuzwerker/terraform-provider-docker/issues/400))
-* ECR authentication ([#409](https://github.com/kreuzwerker/terraform-provider-docker/issues/409))
-
-
-<a name="v2.18.1"></a>
-## [v2.18.1](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.18.0...v2.18.1) (2022-07-14)
-
-### Chore
-
-* Prepare release v2.18.1
-* Automate changelog generation [skip ci]
-
-### Fix
-
-* Improve searchLocalImages error handling. ([#407](https://github.com/kreuzwerker/terraform-provider-docker/issues/407))
-* Throw errors when any part of docker config file handling goes wrong. ([#406](https://github.com/kreuzwerker/terraform-provider-docker/issues/406))
-* Enables having a Dockerfile outside the context ([#402](https://github.com/kreuzwerker/terraform-provider-docker/issues/402))
-
-
-<a name="v2.18.0"></a>
-## [v2.18.0](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.17.0...v2.18.0) (2022-07-11)
-
-### Chore
-
-* prepare release v2.18.0
-
-### Feat
-
-* add runtime, stop_signal and stop_timeout properties to the docker_container resource ([#364](https://github.com/kreuzwerker/terraform-provider-docker/issues/364))
-
-### Fix
-
-* Correctly handle build files and context for docker_registry_image ([#398](https://github.com/kreuzwerker/terraform-provider-docker/issues/398))
-* Switch to proper go tools mechanism to fix website-* workflows. ([#399](https://github.com/kreuzwerker/terraform-provider-docker/issues/399))
-* compare relative paths when excluding, fixes kreuzwerker[#280](https://github.com/kreuzwerker/terraform-provider-docker/issues/280) ([#397](https://github.com/kreuzwerker/terraform-provider-docker/issues/397))
-
-
-<a name="v2.17.0"></a>
-## [v2.17.0](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.16.0...v2.17.0) (2022-06-23)
-
-### Chore
-
-* prepare release v2.17.0
-* Exclude examples directory from renovate.
-* remove the workflow to close stale issues and pull requests ([#371](https://github.com/kreuzwerker/terraform-provider-docker/issues/371))
-
-### Fix
-
-* update go package files directly on master to fix build.
-* correct authentication for ghcr.io registry([#349](https://github.com/kreuzwerker/terraform-provider-docker/issues/349))
-
-
-<a name="v2.16.0"></a>
-## [v2.16.0](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.15.0...v2.16.0) (2022-01-24)
-
-### Chore
-
-* prepare release v2.16.0
-
-### Docs
-
-* fix service options ([#337](https://github.com/kreuzwerker/terraform-provider-docker/issues/337))
-* update registry_image.md ([#321](https://github.com/kreuzwerker/terraform-provider-docker/issues/321))
-* fix r/registry_image truncated docs ([#304](https://github.com/kreuzwerker/terraform-provider-docker/issues/304))
-
-### Feat
-
-* add parameter for SSH options ([#335](https://github.com/kreuzwerker/terraform-provider-docker/issues/335))
-
-### Fix
-
-* pass container rm flag ([#322](https://github.com/kreuzwerker/terraform-provider-docker/issues/322))
-* add nil check of DriverConfig ([#315](https://github.com/kreuzwerker/terraform-provider-docker/issues/315))
-* fmt of go files for go 1.17
-
-
-<a name="v2.15.0"></a>
-## [v2.15.0](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.14.0...v2.15.0) (2021-08-11)
-
-### Chore
-
-* prepare release v2.15.0
-* re go gets terraform-plugin-docs
-
-### Docs
-
-* corrects authentication misspell. Closes [#264](https://github.com/kreuzwerker/terraform-provider-docker/issues/264)
-
-### Feat
-
-* add container storage opts ([#258](https://github.com/kreuzwerker/terraform-provider-docker/issues/258))
-
-### Fix
-
-* add current timestamp for file upload to container ([#259](https://github.com/kreuzwerker/terraform-provider-docker/issues/259))
-
-
-<a name="v2.14.0"></a>
-## [v2.14.0](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.13.0...v2.14.0) (2021-07-09)
-
-### Chore
-
-* prepare release v2.14.0
-
-### Docs
-
-* update to absolute path for registry image context ([#246](https://github.com/kreuzwerker/terraform-provider-docker/issues/246))
-* update readme with logos and subsections ([#235](https://github.com/kreuzwerker/terraform-provider-docker/issues/235))
-
-### Feat
-
-* support terraform v1 ([#242](https://github.com/kreuzwerker/terraform-provider-docker/issues/242))
-
-### Fix
-
-* Update the URL of the docker hub registry ([#230](https://github.com/kreuzwerker/terraform-provider-docker/issues/230))
-
-
-<a name="v2.13.0"></a>
-## [v2.13.0](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.12.2...v2.13.0) (2021-06-22)
-
-### Chore
-
-* prepare release v2.13.0
-
-### Docs
-
-* fix a few typos ([#216](https://github.com/kreuzwerker/terraform-provider-docker/issues/216))
-* fix typos in docker_image example usage ([#213](https://github.com/kreuzwerker/terraform-provider-docker/issues/213))
-
-
-<a name="v2.12.2"></a>
-## [v2.12.2](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.12.1...v2.12.2) (2021-05-26)
-
-### Chore
-
-* prepare release v2.12.2
-
-
-<a name="v2.12.1"></a>
-## [v2.12.1](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.12.0...v2.12.1) (2021-05-26)
-
-### Chore
-
-* update changelog for v2.12.1
-
-### Fix
-
-* add service host flattener with space split ([#205](https://github.com/kreuzwerker/terraform-provider-docker/issues/205))
-* service state upgradeV2 for empty auth
-
-
-<a name="v2.12.0"></a>
-## [v2.12.0](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.11.0...v2.12.0) (2021-05-23)
-
-### Chore
-
-* update changelog for v2.12.0
-* ignore dist folder
-* configure actions/stale ([#157](https://github.com/kreuzwerker/terraform-provider-docker/issues/157))
-* add the guide about Terraform Configuration in Bug Report ([#139](https://github.com/kreuzwerker/terraform-provider-docker/issues/139))
-* bump docker dependency to v20.10.5 ([#119](https://github.com/kreuzwerker/terraform-provider-docker/issues/119))
-
-### Ci
-
-* run acceptance tests with multiple Terraform versions ([#129](https://github.com/kreuzwerker/terraform-provider-docker/issues/129))
-
-### Docs
-
-* update for v2.12.0
-* add releasing steps
-* format `Guide of Bug report` ([#159](https://github.com/kreuzwerker/terraform-provider-docker/issues/159))
-* add an example to build an image with docker_image ([#158](https://github.com/kreuzwerker/terraform-provider-docker/issues/158))
-* add a guide about writing issues to CONTRIBUTING.md ([#149](https://github.com/kreuzwerker/terraform-provider-docker/issues/149))
-* fix Github repository URL in README ([#136](https://github.com/kreuzwerker/terraform-provider-docker/issues/136))
-
-### Feat
-
-* support darwin arm builds and golang 1.16 ([#140](https://github.com/kreuzwerker/terraform-provider-docker/issues/140))
-* migrate to terraform-sdk v2 ([#102](https://github.com/kreuzwerker/terraform-provider-docker/issues/102))
-
-### Fix
-
-* rewriting tar header fields ([#198](https://github.com/kreuzwerker/terraform-provider-docker/issues/198))
-* test spaces for windows ([#190](https://github.com/kreuzwerker/terraform-provider-docker/issues/190))
-* replace for loops with StateChangeConf ([#182](https://github.com/kreuzwerker/terraform-provider-docker/issues/182))
-* skip sign on compile action
-* assign map to rawState when it is nil to prevent panic ([#180](https://github.com/kreuzwerker/terraform-provider-docker/issues/180))
-* search local images with Docker image ID ([#151](https://github.com/kreuzwerker/terraform-provider-docker/issues/151))
-* set "ForceNew: true" to labelSchema ([#152](https://github.com/kreuzwerker/terraform-provider-docker/issues/152))
-
-
-<a name="v2.11.0"></a>
-## [v2.11.0](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.10.0...v2.11.0) (2021-01-22)
-
-### Chore
-
-* update changelog for v2.11.0
-* updates changelog for v2.10.0
-
-### Docs
-
-* fix legacy configuration style ([#126](https://github.com/kreuzwerker/terraform-provider-docker/issues/126))
-
-### Feat
-
-* add properties -it (tty and stdin_opn) to docker container
-
-
-<a name="v2.10.0"></a>
-## [v2.10.0](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.9.0...v2.10.0) (2021-01-08)
-
-### Chore
-
-* updates changelog for 2.10.0
-* ignores testing folders
-* adds separate bug and ft req templates
-
-### Ci
-
-* bumps to docker version 20.10.1
-* pins workflows to ubuntu:20.04 image
-
-### Docs
-
-* add labels to arguments of docker_service ([#105](https://github.com/kreuzwerker/terraform-provider-docker/issues/105))
-* cleans readme
-* adds coc and contributing
-
-### Feat
-
-* supports Docker plugin ([#35](https://github.com/kreuzwerker/terraform-provider-docker/issues/35))
-* support max replicas of Docker Service Task Spec ([#112](https://github.com/kreuzwerker/terraform-provider-docker/issues/112))
-* add force_remove option to r/image ([#104](https://github.com/kreuzwerker/terraform-provider-docker/issues/104))
-* add local semantic commit validation ([#99](https://github.com/kreuzwerker/terraform-provider-docker/issues/99))
-* add ability to lint/check of links in documentation locally ([#98](https://github.com/kreuzwerker/terraform-provider-docker/issues/98))
-
-### Fix
-
-* set "latest" to tag when tag isn't specified ([#117](https://github.com/kreuzwerker/terraform-provider-docker/issues/117))
-* image label for workflows
-* remove all azure cps
-
-### Pull Requests
-
-* Merge pull request [#38](https://github.com/kreuzwerker/terraform-provider-docker/issues/38) from kreuzwerker/ci-ubuntu2004-workflow
-* Merge pull request [#36](https://github.com/kreuzwerker/terraform-provider-docker/issues/36) from kreuzwerker/chore-gh-issue-tpl
-
-
-<a name="v2.9.0"></a>
-## [v2.9.0](https://github.com/kreuzwerker/terraform-provider-docker/compare/v2.8.0...v2.9.0) (2020-12-25)
-
-### Chore
-
-* updates changelog for 2.9.0
-* update changelog 2.8.0 release date
-* introduces golangci-lint ([#32](https://github.com/kreuzwerker/terraform-provider-docker/issues/32))
-* fix changelog links
-
-### Ci
-
-* add gofmt's '-s' option
-* remove unneeded make tasks
-* fix test of website
-
-### Doc
-
-* devices is a block, not a boolean
-
-### Feat
-
-* adds support for OCI manifests ([#316](https://github.com/kreuzwerker/terraform-provider-docker/issues/316))
-* adds security_opts to container config. ([#308](https://github.com/kreuzwerker/terraform-provider-docker/issues/308))
-* adds support for init process injection for containers. ([#300](https://github.com/kreuzwerker/terraform-provider-docker/issues/300))
-
-### Fix
-
-* changing mounts requires ForceNew ([#314](https://github.com/kreuzwerker/terraform-provider-docker/issues/314))
-* allow healthcheck to be computed as container can specify ([#312](https://github.com/kreuzwerker/terraform-provider-docker/issues/312))
-* treat null user as a no-op ([#318](https://github.com/kreuzwerker/terraform-provider-docker/issues/318))
-* workdir null behavior ([#320](https://github.com/kreuzwerker/terraform-provider-docker/issues/320))
-
-### Style
-
-* format with gofumpt
-
-### Pull Requests
-
-* Merge pull request [#33](https://github.com/kreuzwerker/terraform-provider-docker/issues/33) from brandonros/patch-1
-* Merge pull request [#11](https://github.com/kreuzwerker/terraform-provider-docker/issues/11) from suzuki-shunsuke/format-with-gofumpt
-* Merge pull request [#26](https://github.com/kreuzwerker/terraform-provider-docker/issues/26) from kreuzwerker/ci/fix-website-ci
-* Merge pull request [#8](https://github.com/kreuzwerker/terraform-provider-docker/issues/8) from dubo-dubon-duponey/patch1
-
-
-<a name="v2.8.0"></a>
-## v2.8.0 (2020-11-11)
-
-### Chore
-
-* updates changelog for 2.8.0
-* removes travis.yml
-* deactivates travis
-* removes vendor dir ([#298](https://github.com/kreuzwerker/terraform-provider-docker/issues/298))
-* bump go 115 ([#297](https://github.com/kreuzwerker/terraform-provider-docker/issues/297))
-* documentation updates ([#286](https://github.com/kreuzwerker/terraform-provider-docker/issues/286))
-* updates link syntax ([#287](https://github.com/kreuzwerker/terraform-provider-docker/issues/287))
-* fix typo ([#292](https://github.com/kreuzwerker/terraform-provider-docker/issues/292))
-
-### Ci
-
-* reactivats all workflows
-* fix website
-* only run website workflow
-* exports gopath manually
-* fix absolute gopath for website
-* make website check separate workflow
-* fix workflow names
-* adds website test to unit test
-* adds acc test
-* adds compile
-* adds go version and goproxy env
-* enables unit tests for master branch
-* adds unit test workflow
-* adds goreleaser and gh action
-* bumps docker and ubuntu versions ([#241](https://github.com/kreuzwerker/terraform-provider-docker/issues/241))
-* removes debug option from acc tests
-* skips test which is flaky only on travis
-
-### Deps
-
-* github.com/hashicorp/terraform[@sdk](https://github.com/sdk)-v0.11-with-go-modules Updated via: go get github.com/hashicorp/terraform[@sdk](https://github.com/sdk)-v0.11-with-go-modules and go mod tidy
-* use go modules for dep mgmt run go mod tidy remove govendor from makefile and travis config set appropriate env vars for go modules
-
-### Docker
-
-* improve validation of runtime constraints
-
-### Docs
-
-* update container.html.markdown ([#278](https://github.com/kreuzwerker/terraform-provider-docker/issues/278))
-* update service.html.markdown ([#281](https://github.com/kreuzwerker/terraform-provider-docker/issues/281))
-* update restart_policy for service. Closes [#228](https://github.com/kreuzwerker/terraform-provider-docker/issues/228)
-* adds new label structure. Closes [#214](https://github.com/kreuzwerker/terraform-provider-docker/issues/214)
-* update anchors with -1 suffix ([#178](https://github.com/kreuzwerker/terraform-provider-docker/issues/178))
-* Fix misspelled words
-* Fix exported attribute name in docker_registry_image
-* Fix example for docker_registry_image ([#8308](https://github.com/kreuzwerker/terraform-provider-docker/issues/8308))
-* provider/docker - network settings attrs
-
-### Feat
-
-* conditionally adding port binding ([#293](https://github.com/kreuzwerker/terraform-provider-docker/issues/293)).
-* adds docker Image build feature ([#283](https://github.com/kreuzwerker/terraform-provider-docker/issues/283))
-* adds complete support for Docker credential helpers ([#253](https://github.com/kreuzwerker/terraform-provider-docker/issues/253))
-* Expose IPv6 properties as attributes
-* allow use of source file instead of content / content_base64 ([#240](https://github.com/kreuzwerker/terraform-provider-docker/issues/240))
-* supports to update docker_container ([#236](https://github.com/kreuzwerker/terraform-provider-docker/issues/236))
-* support to import some docker_container's attributes ([#234](https://github.com/kreuzwerker/terraform-provider-docker/issues/234))
-* adds config file content as plain string ([#232](https://github.com/kreuzwerker/terraform-provider-docker/issues/232))
-* make UID, GID, & mode for secrets and configs configurable ([#231](https://github.com/kreuzwerker/terraform-provider-docker/issues/231))
-* adds import for resources ([#196](https://github.com/kreuzwerker/terraform-provider-docker/issues/196))
-* add container ipc mode. ([#182](https://github.com/kreuzwerker/terraform-provider-docker/issues/182))
-* adds container working dir ([#181](https://github.com/kreuzwerker/terraform-provider-docker/issues/181))
-
-### Fix
-
-* ignores 'remove_volumes' on container import
-* duplicated buildImage function
-* port objects with the same internal port but different protocol trigger recreation of container ([#274](https://github.com/kreuzwerker/terraform-provider-docker/issues/274))
-* panic to migrate schema of docker_container from v1 to v2 ([#271](https://github.com/kreuzwerker/terraform-provider-docker/issues/271)). Closes [#264](https://github.com/kreuzwerker/terraform-provider-docker/issues/264)
-* pins docker registry for tests to v2.7.0
-* prevent force recreate of container about some attributes ([#269](https://github.com/kreuzwerker/terraform-provider-docker/issues/269))
-* service endpoint spec flattening
-* corrects IPAM config read on the data provider ([#229](https://github.com/kreuzwerker/terraform-provider-docker/issues/229))
-* replica to 0 in current schema. Closes [#221](https://github.com/kreuzwerker/terraform-provider-docker/issues/221)
-* label for network and volume after improt
-* binary upload as base 64 content ([#194](https://github.com/kreuzwerker/terraform-provider-docker/issues/194))
-* service env truncation for multiple delimiters ([#193](https://github.com/kreuzwerker/terraform-provider-docker/issues/193))
-* destroy_grace_seconds are considered ([#179](https://github.com/kreuzwerker/terraform-provider-docker/issues/179))
-
-### Make
-
-* Add website + website-test targets
-
-### Provider
-
-* Ensured Go 1.11 in TravisCI and README provider: Run go fix provider: Run go fmt provider: Encode go version 1.11.5 to .go-version file
-* Require Go 1.11 in TravisCI and README provider: Run go fix provider: Run go fmt
-
-### Tests
-
-* Skip test if swap limit isn't available ([#136](https://github.com/kreuzwerker/terraform-provider-docker/issues/136))
-* Simplify Dockerfile(s)
-
-### Vendor
-
-* github.com/hashicorp/terraform/...[@v0](https://github.com/v0).10.0
-* Ignore github.com/hashicorp/terraform/backend
-
-### Website
-
-* Docs sweep for lists & maps
-* note on docker
-* docker docs
-
-### Pull Requests
-
-* Merge pull request [#134](https://github.com/kreuzwerker/terraform-provider-docker/issues/134) from terraform-providers/go-modules-2019-03-01
-* Merge pull request [#135](https://github.com/kreuzwerker/terraform-provider-docker/issues/135) from terraform-providers/t-simplify-dockerfile
-* Merge pull request [#47](https://github.com/kreuzwerker/terraform-provider-docker/issues/47) from captn3m0/docker-link-warning
-* Merge pull request [#60](https://github.com/kreuzwerker/terraform-provider-docker/issues/60) from terraform-providers/f-make-website
-* Merge pull request [#23](https://github.com/kreuzwerker/terraform-provider-docker/issues/23) from JamesLaverack/patch-1
-* Merge pull request [#18](https://github.com/kreuzwerker/terraform-provider-docker/issues/18) from terraform-providers/vendor-tf-0.10
-* Merge pull request [#5046](https://github.com/kreuzwerker/terraform-provider-docker/issues/5046) from tpounds/use-built-in-schema-string-hash
-* Merge pull request [#3761](https://github.com/kreuzwerker/terraform-provider-docker/issues/3761) from ryane/f-provider-docker-improvements
-* Merge pull request [#3383](https://github.com/kreuzwerker/terraform-provider-docker/issues/3383) from apparentlymart/docker-container-command-docs
-* Merge pull request [#1564](https://github.com/kreuzwerker/terraform-provider-docker/issues/1564) from nickryand/docker_links
-
-
-
-### File: terraform/.terraform/providers/registry.terraform.io/kreuzwerker/docker/3.0.2/linux_amd64/terraform-provider-docker_v3.0.2
----
-[ERROR] Could not read file: 'utf-8' codec can't decode byte 0xc8 in position 40: invalid continuation byte
+====================================
 
