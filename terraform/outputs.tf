@@ -1,19 +1,19 @@
-output "webnet_id" {
-  value       = docker_network.webnet.id
-  description = "The ID of the webnet network"
-}
-
-output "keycloak_network_id" {
-  value       = docker_network.keycloak_network.id
-  description = "The ID of the Keycloak network"
-}
-
-output "monitoring_net_id" {
-  value       = docker_network.monitoring_net.id
-  description = "The ID of the monitoring network"
-}
-
 output "traefik_endpoint" {
-  value       = "http://localhost:8082"
+  value       = "http://traefik.example.com"
   description = "The Traefik dashboard endpoint"
+}
+
+output "prometheus_endpoint" {
+  value       = "http://prometheus.example.com"
+  description = "The Prometheus endpoint"
+}
+
+output "grafana_endpoint" {
+  value       = "http://grafana.example.com"
+  description = "The Grafana endpoint"
+}
+
+output "cadvisor_endpoint" {
+  value       = "http://cadvisor.example.com"
+  description = "The cAdvisor endpoint"
 }

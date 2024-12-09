@@ -1,0 +1,757 @@
+[0m[1mdocker_config.grafana_datasource: Refreshing state... [id=wztkb3czujyqk2t54sf0uonhm][0m
+[0m[1mdocker_config.traefik_config: Refreshing state... [id=zn6tdi6d0qznfejpsxx189l5s][0m
+[0m[1mdocker_config.prometheus_config: Refreshing state... [id=uaxksrbb3qcmtkl147m8m6nfn][0m
+[0m[1mdocker_config.grafana_traefik_dashboard: Refreshing state... [id=i9smn82d19rhrj8bbe5xwfb5e][0m
+[0m[1mdocker_config.grafana_dashboard_provider: Refreshing state... [id=mmvwwpq8sdh6ttj0ym4s08mfb][0m
+[0m[1mdocker_volume.grafana_data: Refreshing state... [id=grafana_data][0m
+[0m[1mdocker_volume.traefik_certificates: Refreshing state... [id=traefik-certificates][0m
+[0m[1mdocker_service.prometheus: Refreshing state... [id=2ocpxqpxi3abfcp5kmwxuunp1][0m
+[0m[1mdocker_network.webnet: Refreshing state... [id=t5ijcukfljyqggzwkhojp5ezg][0m
+[0m[1mdocker_volume.prometheus_data: Refreshing state... [id=prometheus_data][0m
+[0m[1mdocker_service.node_exporter: Refreshing state... [id=r4410q1jvewjk52u1n62kypwv][0m
+[0m[1mdocker_network.monitoring_net: Refreshing state... [id=5ijb9df0l6ek27xg5d6q2u213][0m
+[0m[1mdocker_service.cadvisor: Refreshing state... [id=x4w7ss5bjl9dyhh7l8s3151hq][0m
+[0m[1mdocker_service.grafana: Refreshing state... [id=xaiwxtpygiwd4nk0b1d6lnvsm][0m
+[0m[1mdocker_service.traefik: Refreshing state... [id=iab0pdeoatz1ff4ui7zh7gk74][0m
+[0m[1mdocker_network.keycloak_network: Refreshing state... [id=pqc4llwg9tjarb16q2td94b0p][0m
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  [32m+[0m create[0m
+  [31m-[0m destroy[0m
+
+Terraform will perform the following actions:
+
+[1m  # docker_config.grafana_dashboard_provider[0m will be [1m[31mdestroyed[0m
+  # (because docker_config.grafana_dashboard_provider is not in configuration)
+[0m  [31m-[0m[0m resource "docker_config" "grafana_dashboard_provider" {
+      [31m-[0m[0m data = "YXBpVmVyc2lvbjogMQpwcm92aWRlcnM6CiAgLSBuYW1lOiAnRGVmYXVsdCcKICAgIG9yZ0lkOiAxCiAgICBmb2xkZXI6ICcnCiAgICB0eXBlOiBmaWxlCiAgICBkaXNhYmxlRGVsZXRpb246IGZhbHNlCiAgICB1cGRhdGVJbnRlcnZhbFNlY29uZHM6IDMwCiAgICBhbGxvd1VpVXBkYXRlczogdHJ1ZQogICAgb3B0aW9uczoKICAgICAgcGF0aDogL3Zhci9saWIvZ3JhZmFuYS9kYXNoYm9hcmRzCg==" [90m-> null[0m[0m
+      [31m-[0m[0m id   = "mmvwwpq8sdh6ttj0ym4s08mfb" [90m-> null[0m[0m
+      [31m-[0m[0m name = "grafana-dashboard-provider-2024-12-05T09-52-16Z" [90m-> null[0m[0m
+    }
+
+[1m  # docker_config.grafana_datasource[0m will be [1m[31mdestroyed[0m
+  # (because docker_config.grafana_datasource is not in configuration)
+[0m  [31m-[0m[0m resource "docker_config" "grafana_datasource" {
+      [31m-[0m[0m data = "YXBpVmVyc2lvbjogMQpkYXRhc291cmNlczoKICAtIG5hbWU6IFByb21ldGhldXMKICAgIHR5cGU6IHByb21ldGhldXMKICAgIGFjY2VzczogcHJveHkKICAgIHVybDogaHR0cDovL3Byb21ldGhldXM6OTA5MAogICAgaXNEZWZhdWx0OiB0cnVlCg==" [90m-> null[0m[0m
+      [31m-[0m[0m id   = "wztkb3czujyqk2t54sf0uonhm" [90m-> null[0m[0m
+      [31m-[0m[0m name = "grafana-datasource-2024-12-05T09-52-16Z" [90m-> null[0m[0m
+    }
+
+[1m  # docker_config.grafana_traefik_dashboard[0m will be [1m[31mdestroyed[0m
+  # (because docker_config.grafana_traefik_dashboard is not in configuration)
+[0m  [31m-[0m[0m resource "docker_config" "grafana_traefik_dashboard" {
+      [31m-[0m[0m data = "W0pFIEpTT04gREFTSEJPQVJEIEhJRVJdCg==" [90m-> null[0m[0m
+      [31m-[0m[0m id   = "i9smn82d19rhrj8bbe5xwfb5e" [90m-> null[0m[0m
+      [31m-[0m[0m name = "grafana-traefik-dashboard-2024-12-05T09-52-16Z" [90m-> null[0m[0m
+    }
+
+[1m  # docker_config.prometheus_config[0m will be [1m[31mdestroyed[0m
+  # (because docker_config.prometheus_config is not in configuration)
+[0m  [31m-[0m[0m resource "docker_config" "prometheus_config" {
+      [31m-[0m[0m data = "Z2xvYmFsOgogIHNjcmFwZV9pbnRlcnZhbDogMTVzCiAgZXZhbHVhdGlvbl9pbnRlcnZhbDogMTVzCgpzY3JhcGVfY29uZmlnczoKICAtIGpvYl9uYW1lOiAncHJvbWV0aGV1cycKICAgIHN0YXRpY19jb25maWdzOgogICAgICAtIHRhcmdldHM6IFsnbG9jYWxob3N0OjkwOTAnXQoKICAtIGpvYl9uYW1lOiAndHJhZWZpaycKICAgIHN0YXRpY19jb25maWdzOgogICAgICAtIHRhcmdldHM6IFsndHJhZWZpazo4MDgwJ10KCiAgLSBqb2JfbmFtZTogJ25vZGUtZXhwb3J0ZXInCiAgICBzdGF0aWNfY29uZmlnczoKICAgICAgLSB0YXJnZXRzOiBbJ25vZGUtZXhwb3J0ZXI6OTEwMCddCgogIC0gam9iX25hbWU6ICdjYWR2aXNvcicKICAgIHN0YXRpY19jb25maWdzOgogICAgICAtIHRhcmdldHM6IFsnY2Fkdmlzb3I6ODA4MCddCg==" [90m-> null[0m[0m
+      [31m-[0m[0m id   = "uaxksrbb3qcmtkl147m8m6nfn" [90m-> null[0m[0m
+      [31m-[0m[0m name = "prometheus-config-2024-12-05T09-52-16Z" [90m-> null[0m[0m
+    }
+
+[1m  # docker_config.traefik_config[0m will be [1m[31mdestroyed[0m
+  # (because docker_config.traefik_config is not in configuration)
+[0m  [31m-[0m[0m resource "docker_config" "traefik_config" {
+      [31m-[0m[0m data = "YXBpOgogIGRhc2hib2FyZDogdHJ1ZQogIGluc2VjdXJlOiB0cnVlCgplbnRyeVBvaW50czoKICB3ZWI6CiAgICBhZGRyZXNzOiAiOjgwIgogIHdlYnNlY3VyZToKICAgIGFkZHJlc3M6ICI6NDQzIgogIGRhc2hib2FyZDoKICAgIGFkZHJlc3M6ICI6ODA4MiIKCnByb3ZpZGVyczoKICBkb2NrZXI6CiAgICBlbmRwb2ludDogInVuaXg6Ly8vdmFyL3J1bi9kb2NrZXIuc29jayIKICAgIHN3YXJtTW9kZTogdHJ1ZQogICAgZXhwb3NlZEJ5RGVmYXVsdDogZmFsc2UKICAgIG5ldHdvcms6ICJ3ZWJuZXQiCiAgICAgICAgCm1ldHJpY3M6CiAgcHJvbWV0aGV1czoKICAgIGFkZEVudHJ5UG9pbnRzTGFiZWxzOiB0cnVlCiAgICBhZGRTZXJ2aWNlc0xhYmVsczogdHJ1ZQogICAgZW50cnlQb2ludDogbWV0cmljcwogICAgICAgIApsb2c6CiAgbGV2ZWw6ICJERUJVRyIKICAgICAgCmNlcnRpZmljYXRlc1Jlc29sdmVyczoKICBsZXRzZW5jcnlwdDoKICAgIGFjbWU6CiAgICAgIGVtYWlsOiAicm9iYnJpbmtrZW1wZXJAZ21haWwuY29tIgogICAgICBzdG9yYWdlOiAiL2xldHNlbmNyeXB0L2FjbWUuanNvbiIKICAgICAgaHR0cENoYWxsZW5nZToKICAgICAgICBlbnRyeVBvaW50OiB3ZWIK" [90m-> null[0m[0m
+      [31m-[0m[0m id   = "zn6tdi6d0qznfejpsxx189l5s" [90m-> null[0m[0m
+      [31m-[0m[0m name = "traefik-config-2024-12-05T09-52-16Z" [90m-> null[0m[0m
+    }
+
+[1m  # docker_container.traefik[0m will be created
+[0m  [32m+[0m[0m resource "docker_container" "traefik" {
+      [32m+[0m[0m attach                                      = false
+      [32m+[0m[0m bridge                                      = (known after apply)
+      [32m+[0m[0m command                                     = (known after apply)
+      [32m+[0m[0m container_logs                              = (known after apply)
+      [32m+[0m[0m container_read_refresh_timeout_milliseconds = 15000
+      [32m+[0m[0m entrypoint                                  = (known after apply)
+      [32m+[0m[0m env                                         = [
+          [32m+[0m[0m "TRAEFIK_API_DASHBOARD=true",
+          [32m+[0m[0m "TRAEFIK_API_INSECURE=false",
+          [32m+[0m[0m "TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_EMAIL=robbrinkkemper@gmail.com",
+          [32m+[0m[0m "TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_HTTPCHALLENGE=true",
+          [32m+[0m[0m "TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_HTTPCHALLENGE_ENTRYPOINT=http",
+          [32m+[0m[0m "TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_STORAGE=/letsencrypt/acme.json",
+          [32m+[0m[0m "TRAEFIK_ENTRYPOINTS_HTTPS_ADDRESS=:443",
+          [32m+[0m[0m "TRAEFIK_ENTRYPOINTS_HTTP_ADDRESS=:80",
+          [32m+[0m[0m "TRAEFIK_PROVIDERS_DOCKER=true",
+          [32m+[0m[0m "TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT=false",
+        ]
+      [32m+[0m[0m exit_code                                   = (known after apply)
+      [32m+[0m[0m hostname                                    = (known after apply)
+      [32m+[0m[0m id                                          = (known after apply)
+      [32m+[0m[0m image                                       = "traefik:v2.4"
+      [32m+[0m[0m init                                        = (known after apply)
+      [32m+[0m[0m ipc_mode                                    = (known after apply)
+      [32m+[0m[0m log_driver                                  = (known after apply)
+      [32m+[0m[0m logs                                        = false
+      [32m+[0m[0m must_run                                    = true
+      [32m+[0m[0m name                                        = "traefik"
+      [32m+[0m[0m network_data                                = (known after apply)
+      [32m+[0m[0m read_only                                   = false
+      [32m+[0m[0m remove_volumes                              = true
+      [32m+[0m[0m restart                                     = "no"
+      [32m+[0m[0m rm                                          = false
+      [32m+[0m[0m runtime                                     = (known after apply)
+      [32m+[0m[0m security_opts                               = (known after apply)
+      [32m+[0m[0m shm_size                                    = (known after apply)
+      [32m+[0m[0m start                                       = true
+      [32m+[0m[0m stdin_open                                  = false
+      [32m+[0m[0m stop_signal                                 = (known after apply)
+      [32m+[0m[0m stop_timeout                                = (known after apply)
+      [32m+[0m[0m tty                                         = false
+      [32m+[0m[0m wait                                        = false
+      [32m+[0m[0m wait_timeout                                = 60
+
+      [32m+[0m[0m healthcheck (known after apply)
+
+      [32m+[0m[0m labels {
+          [32m+[0m[0m label = "traefik.enable"
+          [32m+[0m[0m value = "true"
+        }
+      [32m+[0m[0m labels {
+          [32m+[0m[0m label = "traefik.http.routers.api.entrypoints"
+          [32m+[0m[0m value = "https"
+        }
+      [32m+[0m[0m labels {
+          [32m+[0m[0m label = "traefik.http.routers.api.middlewares"
+          [32m+[0m[0m value = "auth"
+        }
+      [32m+[0m[0m labels {
+          [32m+[0m[0m label = "traefik.http.routers.api.rule"
+          [32m+[0m[0m value = "Host(`traefik.example.com`)"
+        }
+      [32m+[0m[0m labels {
+          [32m+[0m[0m label = "traefik.http.routers.api.service"
+          [32m+[0m[0m value = "api@internal"
+        }
+      [32m+[0m[0m labels {
+          [32m+[0m[0m label = "traefik.http.routers.api.tls"
+          [32m+[0m[0m value = "true"
+        }
+
+      [32m+[0m[0m networks_advanced {
+          [32m+[0m[0m aliases      = []
+          [32m+[0m[0m name         = "traefik_network"
+            [90m# (2 unchanged attributes hidden)[0m[0m
+        }
+
+      [32m+[0m[0m ports {
+          [32m+[0m[0m external = 80
+          [32m+[0m[0m internal = 80
+          [32m+[0m[0m ip       = "0.0.0.0"
+          [32m+[0m[0m protocol = "tcp"
+        }
+      [32m+[0m[0m ports {
+          [32m+[0m[0m external = 443
+          [32m+[0m[0m internal = 443
+          [32m+[0m[0m ip       = "0.0.0.0"
+          [32m+[0m[0m protocol = "tcp"
+        }
+      [32m+[0m[0m ports {
+          [32m+[0m[0m external = 8080
+          [32m+[0m[0m internal = 8080
+          [32m+[0m[0m ip       = "0.0.0.0"
+          [32m+[0m[0m protocol = "tcp"
+        }
+
+      [32m+[0m[0m volumes {
+          [32m+[0m[0m container_path = "/letsencrypt"
+          [32m+[0m[0m host_path      = "/absolute/path/to/letsencrypt"
+            [90m# (2 unchanged attributes hidden)[0m[0m
+        }
+      [32m+[0m[0m volumes {
+          [32m+[0m[0m container_path = "/var/run/docker.sock"
+          [32m+[0m[0m host_path      = "/var/run/docker.sock"
+            [90m# (2 unchanged attributes hidden)[0m[0m
+        }
+    }
+
+[1m  # docker_network.traefik_network[0m will be created
+[0m  [32m+[0m[0m resource "docker_network" "traefik_network" {
+      [32m+[0m[0m driver      = "overlay"
+      [32m+[0m[0m id          = (known after apply)
+      [32m+[0m[0m internal    = (known after apply)
+      [32m+[0m[0m ipam_driver = "default"
+      [32m+[0m[0m name        = "traefik_network"
+      [32m+[0m[0m options     = (known after apply)
+      [32m+[0m[0m scope       = (known after apply)
+
+      [32m+[0m[0m ipam_config (known after apply)
+    }
+
+[1m  # docker_service.cadvisor[0m will be [1m[31mdestroyed[0m
+  # (because docker_service.cadvisor is not in configuration)
+[0m  [31m-[0m[0m resource "docker_service" "cadvisor" {
+      [31m-[0m[0m id   = "x4w7ss5bjl9dyhh7l8s3151hq" [90m-> null[0m[0m
+      [31m-[0m[0m name = "cadvisor" [90m-> null[0m[0m
+
+      [31m-[0m[0m endpoint_spec {
+          [31m-[0m[0m mode = "vip" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m mode {
+          [31m-[0m[0m global = true [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m task_spec {
+          [31m-[0m[0m force_update = 0 [90m-> null[0m[0m
+          [31m-[0m[0m runtime      = "container" [90m-> null[0m[0m
+
+          [31m-[0m[0m container_spec {
+              [31m-[0m[0m image             = "gcr.io/cadvisor/cadvisor:v0.47.2@sha256:e6c562b5e983f13624898b5b6a902c71999580dc362022fc327c309234c485d7" [90m-> null[0m[0m
+              [31m-[0m[0m isolation         = "default" [90m-> null[0m[0m
+              [31m-[0m[0m read_only         = false [90m-> null[0m[0m
+              [31m-[0m[0m stop_grace_period = "0s" [90m-> null[0m[0m
+                [90m# (4 unchanged attributes hidden)[0m[0m
+
+              [31m-[0m[0m dns_config {}
+
+              [31m-[0m[0m healthcheck {
+                  [31m-[0m[0m interval     = "0s" [90m-> null[0m[0m
+                  [31m-[0m[0m retries      = 0 [90m-> null[0m[0m
+                  [31m-[0m[0m start_period = "0s" [90m-> null[0m[0m
+                  [31m-[0m[0m test         = [] [90m-> null[0m[0m
+                  [31m-[0m[0m timeout      = "0s" [90m-> null[0m[0m
+                }
+
+              [31m-[0m[0m mounts {
+                  [31m-[0m[0m read_only = true [90m-> null[0m[0m
+                  [31m-[0m[0m source    = "/" [90m-> null[0m[0m
+                  [31m-[0m[0m target    = "/rootfs" [90m-> null[0m[0m
+                  [31m-[0m[0m type      = "bind" [90m-> null[0m[0m
+                }
+              [31m-[0m[0m mounts {
+                  [31m-[0m[0m read_only = true [90m-> null[0m[0m
+                  [31m-[0m[0m source    = "/dev/disk" [90m-> null[0m[0m
+                  [31m-[0m[0m target    = "/dev/disk" [90m-> null[0m[0m
+                  [31m-[0m[0m type      = "bind" [90m-> null[0m[0m
+                }
+              [31m-[0m[0m mounts {
+                  [31m-[0m[0m read_only = true [90m-> null[0m[0m
+                  [31m-[0m[0m source    = "/sys" [90m-> null[0m[0m
+                  [31m-[0m[0m target    = "/sys" [90m-> null[0m[0m
+                  [31m-[0m[0m type      = "bind" [90m-> null[0m[0m
+                }
+              [31m-[0m[0m mounts {
+                  [31m-[0m[0m read_only = true [90m-> null[0m[0m
+                  [31m-[0m[0m source    = "/var/lib/docker" [90m-> null[0m[0m
+                  [31m-[0m[0m target    = "/var/lib/docker" [90m-> null[0m[0m
+                  [31m-[0m[0m type      = "bind" [90m-> null[0m[0m
+                }
+              [31m-[0m[0m mounts {
+                  [31m-[0m[0m read_only = true [90m-> null[0m[0m
+                  [31m-[0m[0m source    = "/var/run" [90m-> null[0m[0m
+                  [31m-[0m[0m target    = "/var/run" [90m-> null[0m[0m
+                  [31m-[0m[0m type      = "bind" [90m-> null[0m[0m
+                }
+            }
+
+          [31m-[0m[0m networks_advanced {
+              [31m-[0m[0m aliases     = [] [90m-> null[0m[0m
+              [31m-[0m[0m driver_opts = [] [90m-> null[0m[0m
+              [31m-[0m[0m name        = "monitoring_net" [90m-> null[0m[0m
+            }
+
+          [31m-[0m[0m placement {
+              [31m-[0m[0m constraints  = [] [90m-> null[0m[0m
+              [31m-[0m[0m max_replicas = 0 [90m-> null[0m[0m
+              [31m-[0m[0m prefs        = [] [90m-> null[0m[0m
+
+              [31m-[0m[0m platforms {
+                  [31m-[0m[0m architecture = "amd64" [90m-> null[0m[0m
+                  [31m-[0m[0m os           = "linux" [90m-> null[0m[0m
+                }
+            }
+
+          [31m-[0m[0m resources {
+            }
+
+          [31m-[0m[0m restart_policy {
+              [31m-[0m[0m condition    = "any" [90m-> null[0m[0m
+              [31m-[0m[0m max_attempts = 0 [90m-> null[0m[0m
+                [90m# (2 unchanged attributes hidden)[0m[0m
+            }
+        }
+    }
+
+[1m  # docker_service.grafana[0m will be [1m[31mdestroyed[0m
+  # (because docker_service.grafana is not in configuration)
+[0m  [31m-[0m[0m resource "docker_service" "grafana" {
+      [31m-[0m[0m id   = "xaiwxtpygiwd4nk0b1d6lnvsm" [90m-> null[0m[0m
+      [31m-[0m[0m name = "grafana" [90m-> null[0m[0m
+
+      [31m-[0m[0m endpoint_spec {
+          [31m-[0m[0m mode = "vip" [90m-> null[0m[0m
+
+          [31m-[0m[0m ports {
+                name           = [90mnull[0m[0m
+              [31m-[0m[0m protocol       = "tcp" [90m-> null[0m[0m
+              [31m-[0m[0m publish_mode   = "ingress" [90m-> null[0m[0m
+              [31m-[0m[0m published_port = 3000 [90m-> null[0m[0m
+              [31m-[0m[0m target_port    = 3000 [90m-> null[0m[0m
+            }
+        }
+
+      [31m-[0m[0m labels {
+          [31m-[0m[0m label = "traefik.enable" [90m-> null[0m[0m
+          [31m-[0m[0m value = "true" [90m-> null[0m[0m
+        }
+      [31m-[0m[0m labels {
+          [31m-[0m[0m label = "traefik.http.routers.grafana.rule" [90m-> null[0m[0m
+          [31m-[0m[0m value = "PathPrefix(`/grafana`)" [90m-> null[0m[0m
+        }
+      [31m-[0m[0m labels {
+          [31m-[0m[0m label = "traefik.http.services.grafana.loadbalancer.server.port" [90m-> null[0m[0m
+          [31m-[0m[0m value = "3000" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m mode {
+          [31m-[0m[0m global = false [90m-> null[0m[0m
+
+          [31m-[0m[0m replicated {
+              [31m-[0m[0m replicas = 1 [90m-> null[0m[0m
+            }
+        }
+
+      [31m-[0m[0m task_spec {
+          [31m-[0m[0m force_update = 0 [90m-> null[0m[0m
+          [31m-[0m[0m runtime      = "container" [90m-> null[0m[0m
+
+          [31m-[0m[0m container_spec {
+              [31m-[0m[0m env               = {
+                  [31m-[0m[0m "GF_SECURITY_ADMIN_PASSWORD"    = (sensitive value)
+                  [31m-[0m[0m "GF_SECURITY_ADMIN_USER"        = "admin"
+                  [31m-[0m[0m "GF_SERVER_ROOT_URL"            = "%(protocol)s://%(domain)s:%(http_port)s/grafana"
+                  [31m-[0m[0m "GF_SERVER_SERVE_FROM_SUB_PATH" = "true"
+                  [31m-[0m[0m "GF_USERS_ALLOW_SIGN_UP"        = "false"
+                } [90m-> null[0m[0m
+              [31m-[0m[0m image             = "grafana/grafana:10.0.3@sha256:423040d62678074111e4e72d7dcef23480a94eb4f21b9173204d1a5ee972ec59" [90m-> null[0m[0m
+              [31m-[0m[0m isolation         = "default" [90m-> null[0m[0m
+              [31m-[0m[0m read_only         = false [90m-> null[0m[0m
+              [31m-[0m[0m stop_grace_period = "0s" [90m-> null[0m[0m
+                [90m# (4 unchanged attributes hidden)[0m[0m
+
+              [31m-[0m[0m configs {
+                  [31m-[0m[0m config_id   = "i9smn82d19rhrj8bbe5xwfb5e" [90m-> null[0m[0m
+                  [31m-[0m[0m config_name = "grafana-traefik-dashboard-2024-12-05T09-52-16Z" [90m-> null[0m[0m
+                  [31m-[0m[0m file_gid    = "0" [90m-> null[0m[0m
+                  [31m-[0m[0m file_mode   = 292 [90m-> null[0m[0m
+                  [31m-[0m[0m file_name   = "/var/lib/grafana/dashboards/traefik.json" [90m-> null[0m[0m
+                  [31m-[0m[0m file_uid    = "0" [90m-> null[0m[0m
+                }
+              [31m-[0m[0m configs {
+                  [31m-[0m[0m config_id   = "mmvwwpq8sdh6ttj0ym4s08mfb" [90m-> null[0m[0m
+                  [31m-[0m[0m config_name = "grafana-dashboard-provider-2024-12-05T09-52-16Z" [90m-> null[0m[0m
+                  [31m-[0m[0m file_gid    = "0" [90m-> null[0m[0m
+                  [31m-[0m[0m file_mode   = 292 [90m-> null[0m[0m
+                  [31m-[0m[0m file_name   = "/etc/grafana/provisioning/dashboards/provider.yml" [90m-> null[0m[0m
+                  [31m-[0m[0m file_uid    = "0" [90m-> null[0m[0m
+                }
+              [31m-[0m[0m configs {
+                  [31m-[0m[0m config_id   = "wztkb3czujyqk2t54sf0uonhm" [90m-> null[0m[0m
+                  [31m-[0m[0m config_name = "grafana-datasource-2024-12-05T09-52-16Z" [90m-> null[0m[0m
+                  [31m-[0m[0m file_gid    = "0" [90m-> null[0m[0m
+                  [31m-[0m[0m file_mode   = 292 [90m-> null[0m[0m
+                  [31m-[0m[0m file_name   = "/etc/grafana/provisioning/datasources/prometheus.yml" [90m-> null[0m[0m
+                  [31m-[0m[0m file_uid    = "0" [90m-> null[0m[0m
+                }
+
+              [31m-[0m[0m dns_config {}
+
+              [31m-[0m[0m healthcheck {
+                  [31m-[0m[0m interval     = "0s" [90m-> null[0m[0m
+                  [31m-[0m[0m retries      = 0 [90m-> null[0m[0m
+                  [31m-[0m[0m start_period = "0s" [90m-> null[0m[0m
+                  [31m-[0m[0m test         = [] [90m-> null[0m[0m
+                  [31m-[0m[0m timeout      = "0s" [90m-> null[0m[0m
+                }
+
+              [31m-[0m[0m mounts {
+                  [31m-[0m[0m source = "grafana_data" [90m-> null[0m[0m
+                  [31m-[0m[0m target = "/var/lib/grafana" [90m-> null[0m[0m
+                  [31m-[0m[0m type   = "volume" [90m-> null[0m[0m
+                }
+            }
+
+          [31m-[0m[0m networks_advanced {
+              [31m-[0m[0m aliases     = [] [90m-> null[0m[0m
+              [31m-[0m[0m driver_opts = [] [90m-> null[0m[0m
+              [31m-[0m[0m name        = "monitoring_net" [90m-> null[0m[0m
+            }
+          [31m-[0m[0m networks_advanced {
+              [31m-[0m[0m aliases     = [] [90m-> null[0m[0m
+              [31m-[0m[0m driver_opts = [] [90m-> null[0m[0m
+              [31m-[0m[0m name        = "webnet" [90m-> null[0m[0m
+            }
+
+          [31m-[0m[0m placement {
+              [31m-[0m[0m constraints  = [
+                  [31m-[0m[0m "node.role == manager",
+                ] [90m-> null[0m[0m
+              [31m-[0m[0m max_replicas = 0 [90m-> null[0m[0m
+            }
+
+          [31m-[0m[0m resources {
+            }
+
+          [31m-[0m[0m restart_policy {
+              [31m-[0m[0m condition    = "any" [90m-> null[0m[0m
+              [31m-[0m[0m max_attempts = 0 [90m-> null[0m[0m
+                [90m# (2 unchanged attributes hidden)[0m[0m
+            }
+        }
+    }
+
+[1m  # docker_service.node_exporter[0m will be [1m[31mdestroyed[0m
+  # (because docker_service.node_exporter is not in configuration)
+[0m  [31m-[0m[0m resource "docker_service" "node_exporter" {
+      [31m-[0m[0m id   = "r4410q1jvewjk52u1n62kypwv" [90m-> null[0m[0m
+      [31m-[0m[0m name = "node-exporter" [90m-> null[0m[0m
+
+      [31m-[0m[0m endpoint_spec {
+          [31m-[0m[0m mode = "vip" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m mode {
+          [31m-[0m[0m global = true [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m task_spec {
+          [31m-[0m[0m force_update = 0 [90m-> null[0m[0m
+          [31m-[0m[0m runtime      = "container" [90m-> null[0m[0m
+
+          [31m-[0m[0m container_spec {
+              [31m-[0m[0m args              = [
+                  [31m-[0m[0m "--path.rootfs=/host",
+                  [31m-[0m[0m "--path.procfs=/host/proc",
+                  [31m-[0m[0m "--path.sysfs=/host/sys",
+                  [31m-[0m[0m "--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)",
+                ] [90m-> null[0m[0m
+              [31m-[0m[0m image             = "prom/node-exporter:v1.6.1@sha256:81f94e50ea37a88dfee849d0f4acad25b96b397061f59e5095905f6bc5829637" [90m-> null[0m[0m
+              [31m-[0m[0m isolation         = "default" [90m-> null[0m[0m
+              [31m-[0m[0m read_only         = false [90m-> null[0m[0m
+              [31m-[0m[0m stop_grace_period = "0s" [90m-> null[0m[0m
+                [90m# (4 unchanged attributes hidden)[0m[0m
+
+              [31m-[0m[0m dns_config {}
+
+              [31m-[0m[0m healthcheck {
+                  [31m-[0m[0m interval     = "0s" [90m-> null[0m[0m
+                  [31m-[0m[0m retries      = 0 [90m-> null[0m[0m
+                  [31m-[0m[0m start_period = "0s" [90m-> null[0m[0m
+                  [31m-[0m[0m test         = [] [90m-> null[0m[0m
+                  [31m-[0m[0m timeout      = "0s" [90m-> null[0m[0m
+                }
+
+              [31m-[0m[0m mounts {
+                  [31m-[0m[0m read_only = true [90m-> null[0m[0m
+                  [31m-[0m[0m source    = "/" [90m-> null[0m[0m
+                  [31m-[0m[0m target    = "/host" [90m-> null[0m[0m
+                  [31m-[0m[0m type      = "bind" [90m-> null[0m[0m
+                }
+              [31m-[0m[0m mounts {
+                  [31m-[0m[0m read_only = true [90m-> null[0m[0m
+                  [31m-[0m[0m source    = "/proc" [90m-> null[0m[0m
+                  [31m-[0m[0m target    = "/host/proc" [90m-> null[0m[0m
+                  [31m-[0m[0m type      = "bind" [90m-> null[0m[0m
+                }
+              [31m-[0m[0m mounts {
+                  [31m-[0m[0m read_only = true [90m-> null[0m[0m
+                  [31m-[0m[0m source    = "/sys" [90m-> null[0m[0m
+                  [31m-[0m[0m target    = "/host/sys" [90m-> null[0m[0m
+                  [31m-[0m[0m type      = "bind" [90m-> null[0m[0m
+                }
+            }
+
+          [31m-[0m[0m networks_advanced {
+              [31m-[0m[0m aliases     = [] [90m-> null[0m[0m
+              [31m-[0m[0m driver_opts = [] [90m-> null[0m[0m
+              [31m-[0m[0m name        = "monitoring_net" [90m-> null[0m[0m
+            }
+
+          [31m-[0m[0m placement {
+              [31m-[0m[0m constraints  = [] [90m-> null[0m[0m
+              [31m-[0m[0m max_replicas = 0 [90m-> null[0m[0m
+              [31m-[0m[0m prefs        = [] [90m-> null[0m[0m
+
+              [31m-[0m[0m platforms {
+                  [31m-[0m[0m architecture = "amd64" [90m-> null[0m[0m
+                  [31m-[0m[0m os           = "linux" [90m-> null[0m[0m
+                }
+            }
+
+          [31m-[0m[0m resources {
+            }
+
+          [31m-[0m[0m restart_policy {
+              [31m-[0m[0m condition    = "any" [90m-> null[0m[0m
+              [31m-[0m[0m max_attempts = 0 [90m-> null[0m[0m
+                [90m# (2 unchanged attributes hidden)[0m[0m
+            }
+        }
+    }
+
+[1m  # docker_service.prometheus[0m will be [1m[31mdestroyed[0m
+  # (because docker_service.prometheus is not in configuration)
+[0m  [31m-[0m[0m resource "docker_service" "prometheus" {
+      [31m-[0m[0m id   = "2ocpxqpxi3abfcp5kmwxuunp1" [90m-> null[0m[0m
+      [31m-[0m[0m name = "prometheus" [90m-> null[0m[0m
+
+      [31m-[0m[0m endpoint_spec {
+          [31m-[0m[0m mode = "vip" [90m-> null[0m[0m
+
+          [31m-[0m[0m ports {
+                name           = [90mnull[0m[0m
+              [31m-[0m[0m protocol       = "tcp" [90m-> null[0m[0m
+              [31m-[0m[0m publish_mode   = "ingress" [90m-> null[0m[0m
+              [31m-[0m[0m published_port = 9090 [90m-> null[0m[0m
+              [31m-[0m[0m target_port    = 9090 [90m-> null[0m[0m
+            }
+        }
+
+      [31m-[0m[0m labels {
+          [31m-[0m[0m label = "traefik.enable" [90m-> null[0m[0m
+          [31m-[0m[0m value = "true" [90m-> null[0m[0m
+        }
+      [31m-[0m[0m labels {
+          [31m-[0m[0m label = "traefik.http.routers.prometheus.rule" [90m-> null[0m[0m
+          [31m-[0m[0m value = "PathPrefix(`/prometheus`)" [90m-> null[0m[0m
+        }
+      [31m-[0m[0m labels {
+          [31m-[0m[0m label = "traefik.http.services.prometheus.loadbalancer.server.port" [90m-> null[0m[0m
+          [31m-[0m[0m value = "9090" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m mode {
+          [31m-[0m[0m global = false [90m-> null[0m[0m
+
+          [31m-[0m[0m replicated {
+              [31m-[0m[0m replicas = 1 [90m-> null[0m[0m
+            }
+        }
+
+      [31m-[0m[0m task_spec {
+          [31m-[0m[0m force_update = 0 [90m-> null[0m[0m
+          [31m-[0m[0m runtime      = "container" [90m-> null[0m[0m
+
+          [31m-[0m[0m container_spec {
+              [31m-[0m[0m image             = "prom/prometheus:v2.45.0@sha256:9309deb7c981e8a94584d9ed689fd62f7ac4549d816fd3881550311cf056a237" [90m-> null[0m[0m
+              [31m-[0m[0m isolation         = "default" [90m-> null[0m[0m
+              [31m-[0m[0m read_only         = false [90m-> null[0m[0m
+              [31m-[0m[0m stop_grace_period = "0s" [90m-> null[0m[0m
+                [90m# (4 unchanged attributes hidden)[0m[0m
+
+              [31m-[0m[0m configs {
+                  [31m-[0m[0m config_id   = "uaxksrbb3qcmtkl147m8m6nfn" [90m-> null[0m[0m
+                  [31m-[0m[0m config_name = "prometheus-config-2024-12-05T09-52-16Z" [90m-> null[0m[0m
+                  [31m-[0m[0m file_gid    = "0" [90m-> null[0m[0m
+                  [31m-[0m[0m file_mode   = 292 [90m-> null[0m[0m
+                  [31m-[0m[0m file_name   = "/etc/prometheus/prometheus.yml" [90m-> null[0m[0m
+                  [31m-[0m[0m file_uid    = "0" [90m-> null[0m[0m
+                }
+
+              [31m-[0m[0m dns_config {}
+
+              [31m-[0m[0m healthcheck {
+                  [31m-[0m[0m interval     = "0s" [90m-> null[0m[0m
+                  [31m-[0m[0m retries      = 0 [90m-> null[0m[0m
+                  [31m-[0m[0m start_period = "0s" [90m-> null[0m[0m
+                  [31m-[0m[0m test         = [] [90m-> null[0m[0m
+                  [31m-[0m[0m timeout      = "0s" [90m-> null[0m[0m
+                }
+
+              [31m-[0m[0m mounts {
+                  [31m-[0m[0m source = "prometheus_data" [90m-> null[0m[0m
+                  [31m-[0m[0m target = "/prometheus" [90m-> null[0m[0m
+                  [31m-[0m[0m type   = "volume" [90m-> null[0m[0m
+                }
+            }
+
+          [31m-[0m[0m networks_advanced {
+              [31m-[0m[0m aliases     = [] [90m-> null[0m[0m
+              [31m-[0m[0m driver_opts = [] [90m-> null[0m[0m
+              [31m-[0m[0m name        = "monitoring_net" [90m-> null[0m[0m
+            }
+
+          [31m-[0m[0m placement {
+              [31m-[0m[0m constraints  = [
+                  [31m-[0m[0m "node.role == manager",
+                ] [90m-> null[0m[0m
+              [31m-[0m[0m max_replicas = 0 [90m-> null[0m[0m
+            }
+
+          [31m-[0m[0m resources {
+            }
+
+          [31m-[0m[0m restart_policy {
+              [31m-[0m[0m condition    = "any" [90m-> null[0m[0m
+              [31m-[0m[0m max_attempts = 0 [90m-> null[0m[0m
+                [90m# (2 unchanged attributes hidden)[0m[0m
+            }
+        }
+    }
+
+[1m  # docker_service.traefik[0m will be [1m[31mdestroyed[0m
+  # (because docker_service.traefik is not in configuration)
+[0m  [31m-[0m[0m resource "docker_service" "traefik" {
+      [31m-[0m[0m id   = "iab0pdeoatz1ff4ui7zh7gk74" [90m-> null[0m[0m
+      [31m-[0m[0m name = "traefik" [90m-> null[0m[0m
+
+      [31m-[0m[0m endpoint_spec {
+          [31m-[0m[0m mode = "vip" [90m-> null[0m[0m
+
+          [31m-[0m[0m ports {
+              [31m-[0m[0m name           = "web" [90m-> null[0m[0m
+              [31m-[0m[0m protocol       = "tcp" [90m-> null[0m[0m
+              [31m-[0m[0m publish_mode   = "ingress" [90m-> null[0m[0m
+              [31m-[0m[0m published_port = 80 [90m-> null[0m[0m
+              [31m-[0m[0m target_port    = 80 [90m-> null[0m[0m
+            }
+          [31m-[0m[0m ports {
+              [31m-[0m[0m name           = "websecure" [90m-> null[0m[0m
+              [31m-[0m[0m protocol       = "tcp" [90m-> null[0m[0m
+              [31m-[0m[0m publish_mode   = "ingress" [90m-> null[0m[0m
+              [31m-[0m[0m published_port = 443 [90m-> null[0m[0m
+              [31m-[0m[0m target_port    = 443 [90m-> null[0m[0m
+            }
+          [31m-[0m[0m ports {
+              [31m-[0m[0m name           = "dashboard" [90m-> null[0m[0m
+              [31m-[0m[0m protocol       = "tcp" [90m-> null[0m[0m
+              [31m-[0m[0m publish_mode   = "ingress" [90m-> null[0m[0m
+              [31m-[0m[0m published_port = 8082 [90m-> null[0m[0m
+              [31m-[0m[0m target_port    = 8080 [90m-> null[0m[0m
+            }
+        }
+
+      [31m-[0m[0m labels {
+          [31m-[0m[0m label = "traefik.enable" [90m-> null[0m[0m
+          [31m-[0m[0m value = "true" [90m-> null[0m[0m
+        }
+      [31m-[0m[0m labels {
+          [31m-[0m[0m label = "traefik.http.routers.api.entrypoints" [90m-> null[0m[0m
+          [31m-[0m[0m value = "dashboard" [90m-> null[0m[0m
+        }
+      [31m-[0m[0m labels {
+          [31m-[0m[0m label = "traefik.http.routers.api.rule" [90m-> null[0m[0m
+          [31m-[0m[0m value = "PathPrefix(`/api`) || PathPrefix(`/dashboard`)" [90m-> null[0m[0m
+        }
+      [31m-[0m[0m labels {
+          [31m-[0m[0m label = "traefik.http.routers.api.service" [90m-> null[0m[0m
+          [31m-[0m[0m value = "api@internal" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m mode {
+          [31m-[0m[0m global = false [90m-> null[0m[0m
+
+          [31m-[0m[0m replicated {
+              [31m-[0m[0m replicas = 1 [90m-> null[0m[0m
+            }
+        }
+
+      [31m-[0m[0m task_spec {
+          [31m-[0m[0m force_update = 0 [90m-> null[0m[0m
+          [31m-[0m[0m runtime      = "container" [90m-> null[0m[0m
+
+          [31m-[0m[0m container_spec {
+              [31m-[0m[0m image             = "traefik:v2.10@sha256:6341b98aec5ec8969b99e9730f4c5b22cca3103d42b6bbe4b7a3c910758fe565" [90m-> null[0m[0m
+              [31m-[0m[0m isolation         = "default" [90m-> null[0m[0m
+              [31m-[0m[0m read_only         = false [90m-> null[0m[0m
+              [31m-[0m[0m stop_grace_period = "0s" [90m-> null[0m[0m
+                [90m# (4 unchanged attributes hidden)[0m[0m
+
+              [31m-[0m[0m configs {
+                  [31m-[0m[0m config_id   = "zn6tdi6d0qznfejpsxx189l5s" [90m-> null[0m[0m
+                  [31m-[0m[0m config_name = "traefik-config-2024-12-05T09-52-16Z" [90m-> null[0m[0m
+                  [31m-[0m[0m file_gid    = "0" [90m-> null[0m[0m
+                  [31m-[0m[0m file_mode   = 292 [90m-> null[0m[0m
+                  [31m-[0m[0m file_name   = "/etc/traefik/traefik.yml" [90m-> null[0m[0m
+                  [31m-[0m[0m file_uid    = "0" [90m-> null[0m[0m
+                }
+
+              [31m-[0m[0m dns_config {}
+
+              [31m-[0m[0m healthcheck {
+                  [31m-[0m[0m interval     = "0s" [90m-> null[0m[0m
+                  [31m-[0m[0m retries      = 0 [90m-> null[0m[0m
+                  [31m-[0m[0m start_period = "0s" [90m-> null[0m[0m
+                  [31m-[0m[0m test         = [] [90m-> null[0m[0m
+                  [31m-[0m[0m timeout      = "0s" [90m-> null[0m[0m
+                }
+
+              [31m-[0m[0m mounts {
+                  [31m-[0m[0m read_only = true [90m-> null[0m[0m
+                  [31m-[0m[0m source    = "/var/run/docker.sock" [90m-> null[0m[0m
+                  [31m-[0m[0m target    = "/var/run/docker.sock" [90m-> null[0m[0m
+                  [31m-[0m[0m type      = "bind" [90m-> null[0m[0m
+                }
+              [31m-[0m[0m mounts {
+                  [31m-[0m[0m source = "traefik-certificates" [90m-> null[0m[0m
+                  [31m-[0m[0m target = "/letsencrypt" [90m-> null[0m[0m
+                  [31m-[0m[0m type   = "volume" [90m-> null[0m[0m
+                }
+            }
+
+          [31m-[0m[0m networks_advanced {
+              [31m-[0m[0m aliases     = [] [90m-> null[0m[0m
+              [31m-[0m[0m driver_opts = [] [90m-> null[0m[0m
+              [31m-[0m[0m name        = "webnet" [90m-> null[0m[0m
+            }
+
+          [31m-[0m[0m placement {
+              [31m-[0m[0m constraints  = [
+                  [31m-[0m[0m "node.role == manager",
+                ] [90m-> null[0m[0m
+              [31m-[0m[0m max_replicas = 0 [90m-> null[0m[0m
+            }
+
+          [31m-[0m[0m resources {
+            }
+
+          [31m-[0m[0m restart_policy {
+              [31m-[0m[0m condition    = "any" [90m-> null[0m[0m
+              [31m-[0m[0m max_attempts = 0 [90m-> null[0m[0m
+                [90m# (2 unchanged attributes hidden)[0m[0m
+            }
+        }
+    }
+
+[1m  # docker_volume.grafana_data[0m will be [1m[31mdestroyed[0m
+  # (because docker_volume.grafana_data is not in configuration)
+[0m  [31m-[0m[0m resource "docker_volume" "grafana_data" {
+      [31m-[0m[0m driver     = "local" [90m-> null[0m[0m
+      [31m-[0m[0m id         = "grafana_data" [90m-> null[0m[0m
+      [31m-[0m[0m mountpoint = "/var/lib/docker/volumes/grafana_data/_data" [90m-> null[0m[0m
+      [31m-[0m[0m name       = "grafana_data" [90m-> null[0m[0m
+    }
+
+[1m  # docker_volume.prometheus_data[0m will be [1m[31mdestroyed[0m
+  # (because docker_volume.prometheus_data is not in configuration)
+[0m  [31m-[0m[0m resource "docker_volume" "prometheus_data" {
+      [31m-[0m[0m driver     = "local" [90m-> null[0m[0m
+      [31m-[0m[0m id         = "prometheus_data" [90m-> null[0m[0m
+      [31m-[0m[0m mountpoint = "/var/lib/docker/volumes/prometheus_data/_data" [90m-> null[0m[0m
+      [31m-[0m[0m name       = "prometheus_data" [90m-> null[0m[0m
+    }
+
+[1m  # docker_volume.traefik_certificates[0m will be [1m[31mdestroyed[0m
+  # (because docker_volume.traefik_certificates is not in configuration)
+[0m  [31m-[0m[0m resource "docker_volume" "traefik_certificates" {
+      [31m-[0m[0m driver      = "local" [90m-> null[0m[0m
+      [31m-[0m[0m driver_opts = {} [90m-> null[0m[0m
+      [31m-[0m[0m id          = "traefik-certificates" [90m-> null[0m[0m
+      [31m-[0m[0m mountpoint  = "/var/lib/docker/volumes/traefik-certificates/_data" [90m-> null[0m[0m
+      [31m-[0m[0m name        = "traefik-certificates" [90m-> null[0m[0m
+    }
+
+[1mPlan:[0m 2 to add, 0 to change, 13 to destroy.
+[0m[90m
+─────────────────────────────────────────────────────────────────────────────[0m
+
+Note: You didn't use the -out option to save this plan, so Terraform can't
+guarantee to take exactly these actions if you run "terraform apply" now.

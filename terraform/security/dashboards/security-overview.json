@@ -1,0 +1,35 @@
+{
+  "title": "Security Overview",
+  "panels": [
+    {
+      "title": "High Severity Vulnerabilities",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(security_vulnerabilities_high_total)"
+        }
+      ]
+    },
+    {
+      "title": "Vulnerabilities by Image",
+      "type": "table",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "security_vulnerabilities_by_image"
+        }
+      ]
+    },
+    {
+      "title": "Scan Status",
+      "type": "gauge",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "security_scan_success"
+        }
+      ]
+    }
+  ]
+}

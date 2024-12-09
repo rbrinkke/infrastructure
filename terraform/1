@@ -1,0 +1,53 @@
+variable "docker_host" {
+  description = "Docker host address"
+  default     = "unix:///var/run/docker.sock"
+}
+
+variable "traefik_admin_auth" {
+  description = "Basic auth for Traefik dashboard (format: user:hashed_password)"
+  sensitive   = true
+}
+
+variable "acme_email" {
+  description = "Email address for Let's Encrypt certificates"
+  type        = string
+  default     = "robbrinkkemper@gmail.com"
+}
+
+variable "grafana_admin_user" {
+  description = "Grafana admin username"
+  type        = string
+  default     = "admin"
+}
+
+variable "grafana_admin_password" {
+  description = "Grafana admin password"
+  type        = string
+  sensitive   = true
+}
+variable "postgres_password" {
+  description = "PostgreSQL password for Keycloak database"
+  type        = string
+  sensitive   = true
+}
+
+variable "keycloak_admin_password" {
+  description = "Keycloak admin password"
+  type        = string
+  sensitive   = true
+
+}
+variable "redis_password" {
+  description = "Redis password for authentication"
+  type        = string
+  sensitive   = true
+} 
+variable "monitoring_network" {
+  description = "Name of the monitoring network"
+  type        = string
+}
+
+variable "traefik_network" {
+  description = "Name of the Traefik network"
+  type        = string
+}

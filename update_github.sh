@@ -1,4 +1,6 @@
 #!/bin/bash
+
+
 # Controleer of een commitbericht is opgegeven
 if [ -z "$1" ]; then
   echo "Gebruik: $0 '<commit-bericht>'"

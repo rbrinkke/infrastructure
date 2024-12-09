@@ -1,8 +1,8 @@
-terraform {
+terraform { 
   required_providers {
     docker = {
       source  = "kreuzwerker/docker"
-      version = ">= 2.13.0"
+      version = "~> 3.0"
     }
   }
 }
@@ -11,147 +11,112 @@ provider "docker" {
   host = var.docker_host
 }
 
-# Networks
-resource "docker_network" "webnet" {
-  name   = "webnet"
-  driver = "overlay"
+# Base modules
+module "monitoring" {
+  source = "./monitoring"
+  traefik_network    = docker_network.traefik_network.name
+  monitoring_network = docker_network.monitoring_network.name
+  grafana_admin_user = var.grafana_admin_user
+  grafana_admin_password = var.grafana_admin_password
 }
 
-resource "docker_network" "keycloak_network" {
-  name   = "keycloak_network"
-  driver = "overlay"
+module "auth" {
+  source = "./auth"
+  traefik_network          = docker_network.traefik_network.name
+  auth_network             = docker_network.auth_network.name
+  postgres_password        = var.postgres_password
+  keycloak_admin_password  = var.keycloak_admin_password
 }
 
-resource "docker_network" "monitoring_net" {
-  name   = "monitoring_net"
-  driver = "overlay"
+# Data stores
+module "redis" {
+  source = "./redis"
+  monitoring_network    = docker_network.monitoring_network.name
+  traefik_network       = docker_network.traefik_network.name
+  redis_password        = var.redis_password
 }
 
-# Traefik Configuration
-resource "docker_config" "traefik_config" {
-  name = "traefik-config-${replace(timestamp(), ":", "-")}"
-  data = base64encode(<<-EOT
-    api:
-      dashboard: true
-      insecure: true
-    
-    entryPoints:
-      web:
-        address: ":80"
-      websecure:
-        address: ":443"
-      dashboard:
-        address: ":8082"
-    
-    providers:
-      docker:
-        endpoint: "unix:///var/run/docker.sock"
-        swarmMode: true
-        exposedByDefault: false
-        network: "webnet"
-        
-    log:
-      level: "DEBUG"
-      
-    certificatesResolvers:
-      letsencrypt:
-        acme:
-          email: "${var.acme_email}"
-          storage: "/letsencrypt/acme.json"
-          httpChallenge:
-            entryPoint: web
-  EOT
-  )
+module "couchdb" {
+  source = "./couchdb"
+  monitoring_network    = docker_network.monitoring_network.name
+  traefik_network       = docker_network.traefik_network.name
+  couchdb_password      = var.couchdb_password
+  couchdb_secret        = var.couchdb_secret
 }
 
-resource "docker_volume" "traefik_certificates" {
-  name = "traefik-certificates"
+module "minio" {
+  source = "./minio"
+  monitoring_network    = docker_network.monitoring_network.name
+  traefik_network       = docker_network.traefik_network.name
+  minio_root_password   = var.minio_root_password
 }
 
-resource "docker_service" "traefik" {
-  name = "traefik"
-
-  mode {
-    replicated {
-      replicas = 1
-    }
-  }
-
-  task_spec {
-    container_spec {
-      image = "traefik:v2.10"
-      
-      configs {
-        config_id   = docker_config.traefik_config.id
-        config_name = docker_config.traefik_config.name
-        file_name   = "/etc/traefik/traefik.yml"
-      }
-
-      mounts {
-        target    = "/var/run/docker.sock"
-        source    = "/var/run/docker.sock"
-        type      = "bind"
-        read_only = true
-      }
-
-      mounts {
-        target = "/letsencrypt"
-        source = docker_volume.traefik_certificates.name
-        type   = "volume"
-      }
-
-      labels {
-        label = "traefik.enable"
-        value = "true"
-      }
-      labels {
-        label = "traefik.http.routers.api.rule"
-        value = "PathPrefix(`/api`) || PathPrefix(`/dashboard`)"
-      }
-      labels {
-        label = "traefik.http.routers.api.service"
-        value = "api@internal"
-      }
-      labels {
-        label = "traefik.http.routers.api.entrypoints"
-        value = "dashboard"
-      }
-    }
-
-    networks_advanced {
-      name = docker_network.webnet.name
-    }
-
-    placement {
-      constraints = ["node.role == manager"]
-    }
-  }
-
-  endpoint_spec {
-    mode = "vip"
-    
-    ports {
-      name           = "web"
-      published_port = 80
-      target_port    = 80
-      protocol       = "tcp"
-      publish_mode   = "ingress"
-    }
-
-    ports {
-      name           = "websecure"
-      published_port = 443
-      target_port    = 443
-      protocol       = "tcp"
-      publish_mode   = "ingress"
-    }
-
-    ports {
-      name           = "dashboard"
-      published_port = 8082
-      target_port    = 8080
-      protocol       = "tcp"
-      publish_mode   = "ingress"
-    }
-  }
+module "flask" {
+  source = "./flask"
+  monitoring_network    = docker_network.monitoring_network.name
+  traefik_network       = docker_network.traefik_network.name
+  redis_password        = var.redis_password
 }
+
+module "vault" {
+  source = "./vault"
+  monitoring_network    = docker_network.monitoring_network.name
+  traefik_network       = docker_network.traefik_network.name
+}
+
+# Backup module
+module "backup" {
+  source = "./backup"
+
+  monitoring_network   = docker_network.monitoring_network.name
+  traefik_network      = docker_network.traefik_network.name
+
+  backup_password      = var.backup_password
+  s3_backup_bucket     = var.s3_backup_bucket
+  aws_access_key       = var.aws_access_key
+  aws_secret_key       = var.aws_secret_key
+
+  postgres_user        = var.postgres_user
+  postgres_password    = var.postgres_password
+
+  redis_password       = var.redis_password
+
+  minio_root_user      = var.minio_root_user
+  minio_root_password  = var.minio_root_password
+
+  couchdb_user         = var.couchdb_user
+  couchdb_password     = var.couchdb_password
+
+  depends_on = [
+    module.auth,
+    module.redis,
+    module.couchdb,
+    module.minio
+  ]
+}
+
+module "security" {
+  source = "./security"
+
+  monitoring_network    = docker_network.monitoring_network.name
+  traefik_network       = docker_network.traefik_network.name
+
+  depends_on = [
+    module.monitoring
+  ]
+}
+
+# Logging module
+module "logging" {
+  source = "./logging"
+
+  monitoring_network = docker_network.monitoring_network.name
+  traefik_network    = docker_network.traefik_network.name
+  logging_network    = docker_network.logging_network.name
+  retention_period   = var.backup_retention_days  # Gebruik de variabele
+
+  depends_on = [
+    module.monitoring
+  ]
+}
+
