@@ -1,3 +1,8 @@
 update_ngrok.sh
 .secrets
 terraform/security/trivy-cache/db/trivy.db
+terraform/auth/postgres-data/
+terraform/vault/vault-data/
+terraform/vault/vault-data/core
+terraform/vault/vault-data/logical
+terraform/vault/vault-data/sys
