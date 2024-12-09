@@ -1747,3 +1747,4 @@ terraform/vault/vault-data/**/.gitattributes
 terraform/auth/postgres-data/**/.gitattributes
 terraform/vault/vault-data/
 terraform/auth/postgres-data/
+terraform/security/trivy-cache/db/trivy.db
