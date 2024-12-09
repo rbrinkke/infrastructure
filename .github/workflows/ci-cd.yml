@@ -36,15 +36,6 @@ jobs:
         with:
           node-version: '16'
 
-      # Extra stap om Vault variabelen te loggen (voor test-doeleinden)
-      - name: Debug Vault environment variables
-        env:
-          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
-          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
-
-
-
-
       - name: Terraform Init
         working-directory: ./terraform
         env:
