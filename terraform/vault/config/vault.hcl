@@ -1,5 +1,5 @@
 storage "file" {
-  path = "/vault/vault-data"
+  path = "/vault/file"
 }
 
 listener "tcp" {
@@ -8,10 +8,16 @@ listener "tcp" {
 }
 
 api_addr = "http://0.0.0.0:8600"
-
-ui = true
+ui       = true
 
 telemetry {
   prometheus_retention_time = "24h"
-  disable_hostname = true
+  disable_hostname         = true
 }
+
+# Audit logging kan later worden toegevoegd
+# audit {
+#   file_path          = "/vault/logs/audit.log"
+#   file_roll_size     = 100
+#   file_roll_duration = "24h"
+# }

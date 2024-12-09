@@ -1,7 +1,4 @@
-# Read system health check
-path "sys/health"
-{
-  capabilities = ["read", "sudo"]
+path "*" {
+  capabilities = ["create", "read", "update", "delete", "list", "sudo"]
 }
 
-# Rest van de policy...
