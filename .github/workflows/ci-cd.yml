@@ -27,10 +27,17 @@ jobs:
         with:
           ssh-private-key: ${{ env.SSH_KEY }}
 
+      # Laat de Docker login zien.
       - name: Debug Docker Login
         run: |
           set -x
           echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin 2>&1 | tee docker_login.log
+
+      # Check de status van Vault voor meer inzicht.
+      - name: Check Vault Status
+        run: |
+          set -x
+          vault status 2>&1 | tee vault_status.log
 
       - name: Initialize Docker Swarm
         run: |
@@ -42,6 +49,7 @@ jobs:
         with:
           terraform_version: 1.4.0
 
+      # Terraform init, met TF_INPUT=false en no-color voor geen interactie en duidelijke logging.
       - name: Terraform Init
         working-directory: ./terraform
         run: |
@@ -60,15 +68,15 @@ jobs:
           export TF_INPUT=false
           terraform apply -auto-approve -input=false -no-color 2>&1 | tee -a terraform_apply.log
 
+      # Ansible Playbook run met extra verbosity en logging.
       - name: Run Ansible Playbook with more verbosity
         working-directory: ./ansible
         run: |
           set -x
           export ANSIBLE_LOG_PATH=ansible_debug.log
-          # Zorg dat Ansible geen interactie nodig heeft. Als je Vault gebruikt,
-          # zorg dan dat je Vault-token en -adres correct zijn en werken.
           ansible-playbook playbook.yml -i inventory.yml -vvvv 2>&1 | tee -a ansible_debug.log
 
+      # Docker stack deploy
       - name: Deploy Docker Stack
         run: |
           set -x
@@ -77,6 +85,7 @@ jobs:
             docker stack deploy -c docker-compose.yml infrastructure_stack
           " 2>&1 | tee docker_stack_deploy.log
 
+      # Upload logs als artifacts
       - name: Upload Logs
         uses: actions/upload-artifact@v3
         with:
@@ -88,4 +97,5 @@ jobs:
             ./docker_login.log
             ./docker_swarm_init.log
             ./docker_stack_deploy.log
+            ./vault_status.log
 

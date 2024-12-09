@@ -1,6 +1,10 @@
 #!/bin/bash
 
 
+
+word=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 8)
+echo $word > /home/rob/repos/infrastructure/test.txt 
+
 # Controleer of een commitbericht is opgegeven
 if [ -z "$1" ]; then
   echo "Gebruik: $0 '<commit-bericht>'"
