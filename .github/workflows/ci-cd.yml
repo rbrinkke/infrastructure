@@ -17,7 +17,6 @@ jobs:
       REMOTE_HOST: "192.168.178.183"
       REMOTE_USER: "swarm_user"
       REMOTE_PATH: "/home/rob/repos/infrastructure"
-      TF_LOG: DEBUG
 
     steps:
       - name: Checkout Code
@@ -28,37 +27,45 @@ jobs:
         with:
           ssh-private-key: ${{ env.SSH_KEY }}
 
-      - name: Login to Docker Hub
+      - name: Debug Docker Login
         run: |
+          set -x
           echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
 
       - name: Initialize Docker Swarm
-        run: docker swarm init || echo "Docker Swarm is mogelijk al geïnitialiseerd"
+        run: |
+          set -x
+          docker swarm init || echo "Docker Swarm is mogelijk al geïnitialiseerd"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.4.0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
-
+      # Stel Terraform in op DEBUG modus voor meer output
       - name: Terraform Init
         working-directory: ./terraform
-        run: terraform init
+        run: |
+          set -x
+          export TF_LOG=DEBUG
+          terraform init
 
       - name: Terraform Apply
         working-directory: ./terraform
-        run: terraform apply -auto-approve
+        run: |
+          set -x
+          export TF_LOG=DEBUG
+          terraform apply -auto-approve
 
-      - name: Run Ansible Playbook
+      - name: Run Ansible Playbook with more verbosity
         working-directory: ./ansible
-        run: ansible-playbook playbook.yml -i inventory.yml -vvv
+        run: |
+          set -x
+          ansible-playbook playbook.yml -i inventory.yml -vvvv
 
       - name: Deploy Docker Stack
         run: |
+          set -x
           ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
             cd $REMOTE_PATH &&
             docker stack deploy -c docker-compose.yml infrastructure_stack
