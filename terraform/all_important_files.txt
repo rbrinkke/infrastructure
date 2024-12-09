@@ -1,0 +1,4678 @@
+Collecting .tf files...
+
+
+===== FILE: ./auth/keycloak.tf =====
+resource "docker_container" "keycloak" {
+  name  = "keycloak"
+  image = "quay.io/keycloak/keycloak:latest"
+  
+  command = [
+    "start-dev",
+    "--db=postgres",
+    "--hostname=https://auth.example.com",      # Nu een volledige URL
+    "--hostname-admin=https://auth.example.com", # Volledige URL
+    "--proxy-headers=forwarded",
+    "--http-enabled=true",
+    "--http-port=8080",
+    "--https-port=8443"
+  ]
+  
+  env = [
+    "KC_DB_URL=jdbc:postgresql://postgres:5432/keycloak",
+    "KC_DB_USERNAME=${var.postgres_user}",
+    "KC_DB_PASSWORD=${var.postgres_password}",
+    "KC_BOOTSTRAP_ADMIN_USERNAME=${var.keycloak_admin}",
+    "KC_BOOTSTRAP_ADMIN_PASSWORD=${var.keycloak_admin_password}",
+    "KEYCLOAK_ADMIN=${var.keycloak_admin}",
+    "KEYCLOAK_ADMIN_PASSWORD=${var.keycloak_admin_password}"
+  ]
+  
+  depends_on = [
+    docker_container.postgres
+  ]
+  
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+  
+  labels {
+    label = "traefik.http.routers.keycloak.rule"
+    value = "Host(`auth.example.com`)"
+  }
+  
+  labels {
+    label = "traefik.http.routers.keycloak.entrypoints"
+    value = "https"
+  }
+  
+  labels {
+    label = "traefik.http.routers.keycloak.tls"
+    value = "true"
+  }
+  
+  labels {
+    label = "traefik.http.services.keycloak.loadbalancer.server.port"
+    value = "8080"
+  }
+  
+  networks_advanced {
+    name = var.auth_network
+  }
+  
+  networks_advanced {
+    name = var.traefik_network
+  }
+
+  healthcheck {
+    test         = ["CMD", "curl", "-f", "http://localhost:8080/health"]
+    interval     = "30s"
+    timeout      = "10s"
+    retries      = 3
+    start_period = "30s"
+  }
+}
+
+
+===== FILE: ./auth/postgresql.tf =====
+resource "docker_container" "postgres" {
+  name  = "postgres"
+  image = "postgres:13"
+  
+  env = [
+    "POSTGRES_DB=keycloak",
+    "POSTGRES_USER=${var.postgres_user}",
+    "POSTGRES_PASSWORD=${var.postgres_password}"
+  ]
+  
+  volumes {
+    host_path      = "${abspath(path.module)}/postgres-data"
+    container_path = "/var/lib/postgresql/data"
+  }
+  
+  networks_advanced {
+    name = var.auth_network
+  }
+  
+  healthcheck {
+    test         = ["CMD-SHELL", "pg_isready -U ${var.postgres_user} -d keycloak"]
+    interval     = "10s"
+    timeout      = "5s"
+    retries      = 5
+    start_period = "10s"
+  }
+}
+
+
+===== FILE: ./auth/variables.tf =====
+variable "auth_network" {
+  description = "Name of the authentication network"
+  type        = string
+}
+
+variable "traefik_network" {
+  description = "Name of the Traefik network"
+  type        = string
+}
+
+variable "postgres_user" {
+  description = "PostgreSQL username"
+  type        = string
+  default     = "keycloak"
+}
+
+variable "postgres_password" {
+  description = "PostgreSQL password"
+  type        = string
+  sensitive   = true
+}
+
+variable "keycloak_admin" {
+  description = "Keycloak admin username"
+  type        = string
+  default     = "admin"
+}
+
+variable "keycloak_admin_password" {
+  description = "Keycloak admin password"
+  type        = string
+  sensitive   = true
+}
+
+
+
+===== FILE: ./auth/versions.tf =====
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
+  }
+}
+
+
+===== FILE: ./backup/main.tf =====
+# backup/main.tf
+resource "docker_container" "backup_service" {
+  name  = "backup-service"
+  image = "alpine:latest"
+  
+  restart = "unless-stopped"
+  
+  command = [
+    "/bin/sh", "-c",
+    <<-EOT
+      # Install required tools
+      apk update && \
+      apk add --no-cache \
+        restic \
+        postgresql-client \
+        curl \
+        jq \
+        redis \
+        mc \
+        dcron
+      
+      # Create backup directory
+      mkdir -p /backup/temp
+      
+      # Setup backup script
+      cat > /backup/backup.sh << 'EOF'
+      #!/bin/sh
+      
+      # Set timestamp
+      TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+      
+      echo "Starting backup process - $${TIMESTAMP}"
+      
+      # Create temp directory for this backup
+      BACKUP_DIR="/backup/temp/$${TIMESTAMP}"
+      mkdir -p $${BACKUP_DIR}
+      
+      # Backup PostgreSQL
+      echo "Backing up PostgreSQL..."
+      PGPASSWORD=$${POSTGRES_PASSWORD} pg_dump -h postgres -U $${POSTGRES_USER} -d keycloak > $${BACKUP_DIR}/postgres_keycloak.sql
+      
+      # Backup CouchDB
+      echo "Backing up CouchDB..."
+      curl -u $${COUCHDB_USER}:$${COUCHDB_PASSWORD} -X GET http://couchdb:5984/_all_dbs | jq -r '.[]' | \
+        while read -r db; do
+          curl -u $${COUCHDB_USER}:$${COUCHDB_PASSWORD} -X GET "http://couchdb:5984/$${db}/_all_docs?include_docs=true" \
+            > $${BACKUP_DIR}/couchdb_$${db}.json
+        done
+      
+      # Backup Redis
+      echo "Backing up Redis..."
+      redis-cli -h redis -a $${REDIS_PASSWORD} --rdb $${BACKUP_DIR}/redis_dump.rdb
+      
+      # Create restic backup
+      echo "Creating restic backup..."
+      restic -r s3:s3.amazonaws.com/$${S3_BACKUP_BUCKET}/restic backup $${BACKUP_DIR}
+      
+      # Cleanup old backups
+      echo "Cleaning up old backups..."
+      restic -r s3:s3.amazonaws.com/$${S3_BACKUP_BUCKET}/restic forget \
+        --keep-last 7 \
+        --keep-daily 7 \
+        --keep-weekly 4 \
+        --keep-monthly 6 \
+        --prune
+      
+      # Cleanup temp directory
+      rm -rf $${BACKUP_DIR}
+      
+      echo "Backup completed successfully"
+EOF
+      
+      # Make backup script executable
+      chmod +x /backup/backup.sh
+      
+      # Create cron directory if it doesn't exist
+      mkdir -p /var/spool/cron/crontabs
+      
+      # Setup cron job
+      echo "0 2 * * * /backup/backup.sh >> /backup/backup.log 2>&1" > /var/spool/cron/crontabs/root
+      
+      # Set proper permissions
+      chmod 0644 /var/spool/cron/crontabs/root
+      
+      # Run initial backup
+      echo "Running initial backup..."
+      /backup/backup.sh
+      
+      # Start cron daemon in foreground
+      exec crond -f
+    EOT
+  ]
+
+  env = [
+    "RESTIC_PASSWORD=${var.backup_password}",
+    "AWS_ACCESS_KEY_ID=${var.aws_access_key}",
+    "AWS_SECRET_ACCESS_KEY=${var.aws_secret_key}",
+    "S3_BACKUP_BUCKET=${var.s3_backup_bucket}",
+    "POSTGRES_USER=${var.postgres_user}",
+    "POSTGRES_PASSWORD=${var.postgres_password}",
+    "REDIS_PASSWORD=${var.redis_password}",
+    "MINIO_ROOT_USER=${var.minio_root_user}",
+    "MINIO_ROOT_PASSWORD=${var.minio_root_password}",
+    "COUCHDB_USER=${var.couchdb_user}",
+    "COUCHDB_PASSWORD=${var.couchdb_password}"
+  ]
+
+  volumes {
+    host_path      = "${abspath(path.module)}/backup-data"
+    container_path = "/backup"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+  
+  networks_advanced {
+    name = var.traefik_network
+  }
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.routers.backup.rule"
+    value = "Host(`backup.example.com`)"
+  }
+
+  labels {
+    label = "traefik.http.routers.backup.entrypoints"
+    value = "https"
+  }
+
+  labels {
+    label = "traefik.http.routers.backup.tls"
+    value = "true"
+  }
+}
+
+
+===== FILE: ./backup/outputs.tf =====
+# backup/outputs.tf
+
+output "backup_service_name" {
+  description = "Name of the backup service container"
+  value       = docker_container.backup_service.name
+}
+
+output "backup_service_id" {
+  description = "ID of the backup service container"
+  value       = docker_container.backup_service.id
+}
+
+
+===== FILE: ./backup/variables.tf =====
+# backup/variables.tf
+variable "monitoring_network" {
+  description = "Name of the monitoring network"
+  type        = string
+}
+
+variable "traefik_network" {
+  description = "Name of the Traefik network"
+  type        = string
+}
+
+variable "backup_password" {
+  description = "Password for backup encryption"
+  type        = string
+  sensitive   = true
+}
+
+variable "s3_backup_bucket" {
+  description = "S3 bucket name for backups"
+  type        = string
+}
+
+variable "aws_access_key" {
+  description = "AWS access key for S3 backup storage"
+  type        = string
+  sensitive   = true
+}
+
+variable "aws_secret_key" {
+  description = "AWS secret key for S3 backup storage"
+  type        = string
+  sensitive   = true
+}
+
+variable "backup_retention_days" {
+  description = "Number of days to retain backups"
+  type        = number
+  default     = 30
+}
+
+variable "postgres_user" {
+  description = "PostgreSQL username for backup"
+  type        = string
+}
+
+variable "postgres_password" {
+  description = "PostgreSQL password for backup"
+  type        = string
+  sensitive   = true
+}
+
+
+# Voeg toe aan backup/variables.tf:
+
+variable "redis_password" {
+  description = "Redis password for authentication"
+  type        = string
+  sensitive   = true
+}
+
+variable "minio_root_user" {
+  description = "MinIO root username"
+  type        = string
+  default     = "admin"
+}
+
+variable "minio_root_password" {
+  description = "MinIO root password"
+  type        = string
+  sensitive   = true
+}
+
+variable "couchdb_user" {
+  description = "CouchDB admin username"
+  type        = string
+  default     = "admin"
+}
+
+variable "couchdb_password" {
+  description = "CouchDB admin password"
+  type        = string
+  sensitive   = true
+}
+
+
+===== FILE: ./backup/versions.tf =====
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
+  }
+}
+
+
+===== FILE: ./couchdb/main.tf =====
+resource "docker_container" "couchdb" {
+  name  = "couchdb"
+  image = "couchdb:latest"
+
+  # Basis CouchDB configuratie
+  upload {
+    content = <<EOF
+[couchdb]
+single_node = true
+max_document_size = 4294967296
+
+[chttpd]
+bind_address = 0.0.0.0
+port = 5984
+
+[httpd]
+enable_cors = true
+
+[cors]
+credentials = true
+origins = *
+headers = accept, authorization, content-type, origin, referer
+methods = GET, PUT, POST, DELETE
+
+[admins]
+${var.couchdb_user} = ${var.couchdb_password}
+EOF
+    file = "/opt/couchdb/etc/local.d/docker.ini"
+  }
+
+  env = [
+    "COUCHDB_USER=${var.couchdb_user}",
+    "COUCHDB_PASSWORD=${var.couchdb_password}",
+    "COUCHDB_SINGLE_NODE=true"
+  ]
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.routers.couchdb.rule"
+    value = "Host(`db.example.com`)"
+  }
+
+  labels {
+    label = "traefik.http.routers.couchdb.entrypoints"
+    value = "https"
+  }
+
+  labels {
+    label = "traefik.http.routers.couchdb.tls"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.services.couchdb.loadbalancer.server.port"
+    value = "5984"
+  }
+
+  volumes {
+    host_path      = "${abspath(path.module)}/data"
+    container_path = "/opt/couchdb/data"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+
+  networks_advanced {
+    name = var.traefik_network
+  }
+
+  healthcheck {
+    test         = ["CMD-SHELL", "curl -f http://localhost:5984/_up || exit 1"]
+    interval     = "10s"
+    timeout      = "5s"
+    retries      = 3
+    start_period = "10s"
+  }
+}
+
+
+
+===== FILE: ./couchdb/variables.tf =====
+variable "monitoring_network" {
+  description = "Name of the monitoring network"
+  type        = string
+}
+
+variable "traefik_network" {
+  description = "Name of the Traefik network"
+  type        = string
+}
+
+variable "couchdb_user" {
+  description = "CouchDB admin username"
+  type        = string
+  default     = "admin"
+}
+
+variable "couchdb_password" {
+  description = "CouchDB admin password"
+  type        = string
+  sensitive   = true
+}
+
+variable "couchdb_secret" {
+  description = "CouchDB cookie secret for cluster communication"
+  type        = string
+  sensitive   = true
+}
+
+
+===== FILE: ./couchdb/versions.tf =====
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
+  }
+}
+
+
+===== FILE: ./flask/main.tf =====
+resource "docker_container" "flask" {
+  name  = "flask"
+  image = "python:3.9-slim"
+
+  command = [
+    "sh", "-c",
+    "apt-get update && apt-get install -y curl && pip install flask redis prometheus_client gunicorn && gunicorn --bind 0.0.0.0:5000 app:app"
+  ]
+
+  working_dir = "/app"
+
+  env = [
+    "FLASK_ENV=production",
+    "REDIS_HOST=redis",
+    "REDIS_PORT=6379",
+    "REDIS_PASSWORD=${var.redis_password}",
+    "WORKERS=4"
+  ]
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.routers.flask.rule"
+    value = "Host(`app.example.com`)"
+  }
+
+  labels {
+    label = "traefik.http.routers.flask.entrypoints"
+    value = "https"
+  }
+
+  labels {
+    label = "traefik.http.routers.flask.tls"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.services.flask.loadbalancer.server.port"
+    value = "5000"
+  }
+
+  volumes {
+    host_path      = "${abspath(path.module)}/app"
+    container_path = "/app"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+  
+  networks_advanced {
+    name = var.traefik_network
+  }
+
+  healthcheck {
+    test         = ["CMD", "curl", "-f", "http://localhost:5000/health"]
+    interval     = "30s"
+    timeout      = "10s"
+    retries      = 3
+    start_period = "60s"
+  }
+}
+
+
+===== FILE: ./flask/variables.tf =====
+variable "monitoring_network" {
+  description = "Name of the monitoring network"
+  type        = string
+}
+
+variable "traefik_network" {
+  description = "Name of the Traefik network"
+  type        = string
+}
+
+variable "redis_password" {
+  description = "Redis password for authentication"
+  type        = string
+  sensitive   = true
+}
+
+
+===== FILE: ./flask/versions.tf =====
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
+  }
+}
+
+
+===== FILE: ./logging/loki.tf =====
+# logging/loki.tf
+resource "local_file" "loki_config" {
+  filename = "${abspath(path.module)}/config/loki-config.yaml"
+  content  = <<-EOT
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2020-01-01
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v11
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  retention_period: 168h
+
+compactor:
+  working_directory: /loki/compactor
+  shared_store: filesystem
+  compaction_interval: 10m
+EOT
+}
+
+resource "docker_container" "loki" {
+  name  = "loki"
+  image = "grafana/loki:latest"
+
+  command = ["--config.file=/etc/loki/config.yaml"]
+
+  volumes {
+    host_path      = local_file.loki_config.filename
+    container_path = "/etc/loki/config.yaml"
+    read_only      = true
+  }
+
+  volumes {
+    host_path      = "${abspath(path.module)}/loki-data"
+    container_path = "/loki"
+  }
+
+  ports {
+    internal = 3100
+    external = 3100
+  }
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.routers.loki.rule"
+    value = "Host(`loki.example.com`)"
+  }
+
+  labels {
+    label = "traefik.http.routers.loki.entrypoints"
+    value = "https"
+  }
+
+  labels {
+    label = "traefik.http.routers.loki.tls"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.services.loki.loadbalancer.server.port"
+    value = "3100"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+
+  networks_advanced {
+    name = var.traefik_network
+  }
+
+  networks_advanced {
+    name = var.logging_network
+  }
+
+  restart = "unless-stopped"
+
+  healthcheck {
+    test         = ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
+    interval     = "30s"
+    timeout      = "5s"
+    retries      = 3
+    start_period = "30s"
+  }
+}
+
+
+===== FILE: ./logging/promtail.tf =====
+# logging/promtail.tf
+resource "local_file" "promtail_configuration" {
+  filename = "${abspath(path.module)}/config/promtail-config.yaml"
+  content  = <<-EOT
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: docker
+          __path__: /var/lib/docker/containers/*/*-json.log
+    pipeline_stages:
+      - json:
+          expressions:
+            output: log
+            stream: stream
+            timestamp: time
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+      - labels:
+          stream:
+      - output:
+          source: output
+EOT
+}
+
+resource "docker_container" "promtail_service" {
+  name  = "promtail"
+  image = "grafana/promtail:latest"
+
+  command = ["-config.file=/etc/promtail/config.yaml"]
+
+  # Run as root to access logs
+  user = "root"
+
+  volumes {
+    host_path      = local_file.promtail_configuration.filename
+    container_path = "/etc/promtail/config.yaml"
+    read_only      = true
+  }
+
+  volumes {
+    host_path      = "/var/lib/docker/containers"
+    container_path = "/var/lib/docker/containers"
+    read_only      = true
+  }
+
+  # Add Docker socket for container discovery
+  volumes {
+    host_path      = "/var/run/docker.sock"
+    container_path = "/var/run/docker.sock"
+    read_only      = true
+  }
+
+  networks_advanced {
+    name = var.logging_network
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+
+  networks_advanced {
+    name = var.traefik_network
+  }
+
+  restart = "unless-stopped"
+
+  healthcheck {
+    test         = ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9080/ready || exit 1"]
+    interval     = "30s"
+    timeout      = "5s"
+    retries      = 3
+    start_period = "30s"
+  }
+
+  depends_on = [
+    docker_container.loki
+  ]
+}
+
+
+===== FILE: ./logging/variables.tf =====
+# logging/variables.tf
+
+variable "monitoring_network" {
+  description = "Naam van het monitoring netwerk"
+  type        = string
+}
+
+variable "traefik_network" {
+  description = "Naam van het Traefik netwerk"
+  type        = string
+}
+
+variable "logging_network" {
+  description = "Naam van het logging netwerk"
+  type        = string
+}
+
+variable "retention_period" {
+  description = "Retentieperiode in dagen"
+  type        = number
+}
+
+
+
+===== FILE: ./logging/versions.tf =====
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
+  }
+}
+
+
+===== FILE: ./main.tf =====
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
+    vault = {
+      source  = "hashicorp/vault"
+      version = "~> 3.0"
+    }
+  }
+}
+
+provider "docker" {
+  host = var.docker_host
+}
+
+provider "vault" {
+  # Maakt gebruik van VAULT_ADDR en VAULT_TOKEN uit je omgeving
+}
+
+# Haal secrets op uit Vault via KV v2
+data "vault_kv_secret_v2" "terraform_secrets" {
+  mount = "secret"
+  name  = "terraform"
+}
+
+# Base modules
+module "monitoring" {
+  source = "./monitoring"
+  traefik_network           = docker_network.traefik_network.name
+  monitoring_network        = docker_network.monitoring_network.name
+  grafana_admin_user        = data.vault_kv_secret_v2.terraform_secrets.data["grafana_admin_user"]
+  grafana_admin_password    = data.vault_kv_secret_v2.terraform_secrets.data["grafana_admin_password"]
+}
+
+module "auth" {
+  source = "./auth"
+  traefik_network          = docker_network.traefik_network.name
+  auth_network             = docker_network.auth_network.name
+  postgres_password        = data.vault_kv_secret_v2.terraform_secrets.data["postgres_password"]
+  keycloak_admin_password  = data.vault_kv_secret_v2.terraform_secrets.data["keycloak_admin_password"]
+}
+
+# Data stores
+module "redis" {
+  source = "./redis"
+  monitoring_network = docker_network.monitoring_network.name
+  traefik_network    = docker_network.traefik_network.name
+  redis_password     = data.vault_kv_secret_v2.terraform_secrets.data["redis_password"]
+}
+
+module "couchdb" {
+  source = "./couchdb"
+  monitoring_network    = docker_network.monitoring_network.name
+  traefik_network       = docker_network.traefik_network.name
+  couchdb_password      = data.vault_kv_secret_v2.terraform_secrets.data["couchdb_password"]
+  couchdb_secret        = data.vault_kv_secret_v2.terraform_secrets.data["couchdb_secret"]
+}
+
+module "minio" {
+  source = "./minio"
+  monitoring_network    = docker_network.monitoring_network.name
+  traefik_network       = docker_network.traefik_network.name
+  minio_root_password   = data.vault_kv_secret_v2.terraform_secrets.data["minio_root_password"]
+}
+
+module "flask" {
+  source = "./flask"
+  monitoring_network    = docker_network.monitoring_network.name
+  traefik_network       = docker_network.traefik_network.name
+  redis_password        = data.vault_kv_secret_v2.terraform_secrets.data["redis_password"]
+}
+
+module "vault" {
+  source = "./vault"
+  monitoring_network    = docker_network.monitoring_network.name
+  traefik_network       = docker_network.traefik_network.name
+}
+
+# Backup module
+module "backup" {
+  source = "./backup"
+  monitoring_network   = docker_network.monitoring_network.name
+  traefik_network      = docker_network.traefik_network.name
+
+  backup_password      = data.vault_kv_secret_v2.terraform_secrets.data["backup_password"]
+  s3_backup_bucket     = data.vault_kv_secret_v2.terraform_secrets.data["s3_backup_bucket"]
+  aws_access_key       = data.vault_kv_secret_v2.terraform_secrets.data["aws_access_key"]
+  aws_secret_key       = data.vault_kv_secret_v2.terraform_secrets.data["aws_secret_key"]
+
+  postgres_user        = var.postgres_user  # Ongevoelig, via tfvars of default
+  postgres_password    = data.vault_kv_secret_v2.terraform_secrets.data["postgres_password"]
+
+  redis_password       = data.vault_kv_secret_v2.terraform_secrets.data["redis_password"]
+
+  minio_root_user      = var.minio_root_user  # Ongevoelig
+  minio_root_password  = data.vault_kv_secret_v2.terraform_secrets.data["minio_root_password"]
+
+  couchdb_user         = var.couchdb_user  # Ongevoelig
+  couchdb_password     = data.vault_kv_secret_v2.terraform_secrets.data["couchdb_password"]
+
+  depends_on = [
+    module.auth,
+    module.redis,
+    module.couchdb,
+    module.minio
+  ]
+}
+
+module "security" {
+  source = "./security"
+  monitoring_network = docker_network.monitoring_network.name
+  traefik_network    = docker_network.traefik_network.name
+  depends_on = [
+    module.monitoring
+  ]
+}
+
+# Logging module
+module "logging" {
+  source = "./logging"
+  monitoring_network = docker_network.monitoring_network.name
+  traefik_network    = docker_network.traefik_network.name
+  logging_network    = docker_network.logging_network.name
+  retention_period   = var.backup_retention_days
+
+  depends_on = [
+    module.monitoring
+  ]
+}
+
+
+
+===== FILE: ./minio/main.tf =====
+# minio/main.tf
+resource "docker_container" "minio" {
+  name  = "minio"
+  image = "minio/minio:latest"
+
+  command = ["server", "/data", "--console-address", ":9001"]
+
+  env = [
+    "MINIO_ROOT_USER=${var.minio_root_user}",
+    "MINIO_ROOT_PASSWORD=${var.minio_root_password}"
+  ]
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+
+  # API Endpoint
+  labels {
+    label = "traefik.http.routers.minio-api.rule"
+    value = "Host(`s3.example.com`)"
+  }
+  labels {
+    label = "traefik.http.routers.minio-api.entrypoints"
+    value = "https"
+  }
+  labels {
+    label = "traefik.http.routers.minio-api.tls"
+    value = "true"
+  }
+  labels {
+    label = "traefik.http.services.minio-api.loadbalancer.server.port"
+    value = "9000"
+  }
+
+  # Console UI
+  labels {
+    label = "traefik.http.routers.minio-console.rule"
+    value = "Host(`minio.example.com`)"
+  }
+  labels {
+    label = "traefik.http.routers.minio-console.entrypoints"
+    value = "https"
+  }
+  labels {
+    label = "traefik.http.routers.minio-console.tls"
+    value = "true"
+  }
+  labels {
+    label = "traefik.http.services.minio-console.loadbalancer.server.port"
+    value = "9001"
+  }
+
+  volumes {
+    host_path      = "${abspath(path.module)}/data"
+    container_path = "/data"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+  
+  networks_advanced {
+    name = var.traefik_network
+  }
+
+  healthcheck {
+    test         = ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+    interval     = "30s"
+    timeout      = "10s"
+    retries      = 3
+    start_period = "30s"
+  }
+}
+
+# minio/variables.tf
+variable "monitoring_network" {
+  description = "Name of the monitoring network"
+  type        = string
+}
+
+variable "traefik_network" {
+  description = "Name of the Traefik network"
+  type        = string
+}
+
+variable "minio_root_user" {
+  description = "MinIO root username"
+  type        = string
+  default     = "admin"
+}
+
+variable "minio_root_password" {
+  description = "MinIO root password"
+  type        = string
+  sensitive   = true
+}
+
+
+===== FILE: ./minio/versions.tf =====
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
+  }
+}
+
+
+===== FILE: ./monitoring/cadvisor.tf =====
+resource "docker_container" "cadvisor" {
+  name  = "cadvisor"
+  image = "gcr.io/cadvisor/cadvisor:latest"
+
+  volumes {
+    host_path      = "/"
+    container_path = "/rootfs"
+    read_only      = true
+  }
+  volumes {
+    host_path      = "/var/run"
+    container_path = "/var/run"
+    read_only      = true
+  }
+  volumes {
+    host_path      = "/sys"
+    container_path = "/sys"
+    read_only      = true
+  }
+  volumes {
+    host_path      = "/var/lib/docker/"
+    container_path = "/var/lib/docker"
+    read_only      = true
+  }
+
+  ports {
+    internal = 8080
+    external = 8082  # Veranderd van 8080 naar 8082
+  }
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+  labels {
+    label = "traefik.http.routers.cadvisor.rule"
+    value = "Host(`cadvisor.example.com`)"
+  }
+  labels {
+    label = "traefik.http.routers.cadvisor.entrypoints"
+    value = "https"
+  }
+  labels {
+    label = "traefik.http.routers.cadvisor.tls"
+    value = "true"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+  
+  networks_advanced {
+    name = var.traefik_network
+  }
+}
+
+
+===== FILE: ./monitoring/grafana.tf =====
+# Grafana configuratie
+resource "docker_service" "grafana" {
+  name = "grafana"
+
+  mode {
+    replicated {
+      replicas = 1
+    }
+  }
+
+  task_spec {
+    container_spec {
+      image = "grafana/grafana:latest"
+
+      env = {
+        "GF_SECURITY_ADMIN_USER"     = var.grafana_admin_user
+        "GF_SECURITY_ADMIN_PASSWORD" = var.grafana_admin_password
+      }
+
+      labels {
+        label = "traefik.enable"
+        value = "true"
+      }
+      labels {
+        label = "traefik.http.routers.grafana.rule"
+        value = "Host(`grafana.example.com`)"
+      }
+    }
+
+    networks_advanced {
+    name = var.monitoring_network
+  }
+  
+  networks_advanced {
+      name = var.traefik_network
+    }
+  }
+
+  endpoint_spec {
+    ports {
+      published_port = 3000
+      target_port    = 3000
+    }
+  }
+}
+
+
+===== FILE: ./monitoring/node_exporter.tf =====
+resource "docker_container" "node_exporter" {
+  name  = "node_exporter"
+  image = "prom/node-exporter:latest"
+
+  ports {
+    internal = 9100
+    external = 9100
+  }
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+  labels {
+    label = "traefik.http.routers.node_exporter.rule"
+    value = "Host(`node-exporter.example.com`)"
+  }
+  labels {
+    label = "traefik.http.routers.node_exporter.entrypoints"
+    value = "https"
+  }
+  labels {
+    label = "traefik.http.routers.node_exporter.tls"
+    value = "true"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+  
+  networks_advanced {
+    name = var.traefik_network
+  }
+}
+
+===== FILE: ./monitoring/prometheus.tf =====
+resource "docker_container" "prometheus" {
+  name  = "prometheus"
+  image = "prom/prometheus:latest"
+
+  volumes {
+    host_path      = "${abspath(path.module)}/config/prometheus.yml"
+    container_path = "/etc/prometheus/prometheus.yml"
+    read_only      = true
+  }
+
+  ports {
+    internal = 9090
+    external = 9090
+  }
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+  labels {
+    label = "traefik.http.routers.prometheus.rule"
+    value = "Host(`prometheus.example.com`)"
+  }
+  labels {
+    label = "traefik.http.routers.prometheus.entrypoints"
+    value = "https"
+  }
+  labels {
+    label = "traefik.http.routers.prometheus.tls"
+    value = "true"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+  
+  networks_advanced {
+    name = var.traefik_network
+  }
+}
+
+
+===== FILE: ./monitoring/variables.tf =====
+variable "traefik_network" {
+  description = "Name of the Traefik network"
+  type        = string
+}
+
+variable "monitoring_network" {
+  description = "Name of the monitoring network"
+  type        = string
+}
+
+variable "grafana_admin_user" {
+  description = "Grafana admin username"
+  type        = string
+  default     = "admin"
+}
+
+variable "grafana_admin_password" {
+  description = "Grafana admin password"
+  type        = string
+  sensitive   = true
+}
+
+===== FILE: ./monitoring/versions.tf =====
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
+  }
+}
+
+
+===== FILE: ./networks.tf =====
+# Network resources
+resource "docker_network" "traefik_network" {
+  name       = "traefik_network"
+  driver     = "overlay"
+  attachable = true
+}
+
+resource "docker_network" "monitoring_network" {
+  name       = "monitoring_network"
+  driver     = "overlay"
+  attachable = true
+}
+# In networks.tf, voeg toe aan de bestaande netwerken:
+resource "docker_network" "auth_network" {
+  name       = "auth_network"
+  driver     = "overlay"
+  attachable = true
+}
+
+# Add to networks.tf:
+resource "docker_network" "logging_network" {
+  name       = "logging_network"
+  driver     = "overlay"
+  attachable = true
+}
+
+
+===== FILE: ./outputs.tf =====
+output "traefik_endpoint" {
+  value       = "http://traefik.example.com"
+  description = "The Traefik dashboard endpoint"
+}
+
+output "prometheus_endpoint" {
+  value       = "http://prometheus.example.com"
+  description = "The Prometheus endpoint"
+}
+
+output "grafana_endpoint" {
+  value       = "http://grafana.example.com"
+  description = "The Grafana endpoint"
+}
+
+output "cadvisor_endpoint" {
+  value       = "http://cadvisor.example.com"
+  description = "The cAdvisor endpoint"
+}
+
+===== FILE: ./redis/main.tf =====
+# redis/main.tf
+resource "docker_container" "redis" {
+  name  = "redis"
+  image = "redis:7-alpine"
+
+  command = [
+    "redis-server",
+    "--requirepass ${var.redis_password}",
+    "--maxmemory ${var.max_memory}",
+    "--maxmemory-policy ${var.eviction_policy}"
+  ]
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.routers.redis.rule"
+    value = "Host(`redis.example.com`)"
+  }
+
+  labels {
+    label = "traefik.http.routers.redis.entrypoints"
+    value = "https"
+  }
+
+  labels {
+    label = "traefik.http.routers.redis.tls"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.services.redis.loadbalancer.server.port"
+    value = "6379"
+  }
+
+  healthcheck {
+    test         = ["CMD", "redis-cli", "ping"]
+    interval     = "5s"
+    timeout      = "3s"
+    retries      = 3
+    start_period = "5s"
+  }
+
+  volumes {
+    host_path      = "${abspath(path.module)}/redis-data"
+    container_path = "/data"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+  
+  networks_advanced {
+    name = var.traefik_network
+  }
+}
+
+resource "docker_container" "redis_exporter" {
+  name  = "redis_exporter"
+  image = "oliver006/redis_exporter:latest"
+
+  env = [
+    "REDIS_ADDR=redis://redis:6379",
+    "REDIS_PASSWORD=${var.redis_password}"
+  ]
+
+  ports {
+    internal = 9121
+    external = 9121
+  }
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.routers.redis-exporter.rule"
+    value = "Host(`redis-metrics.example.com`)"
+  }
+
+  labels {
+    label = "traefik.http.routers.redis-exporter.entrypoints"
+    value = "https"
+  }
+
+  labels {
+    label = "traefik.http.routers.redis-exporter.tls"
+    value = "true"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+
+  networks_advanced {
+    name = var.traefik_network
+  }
+
+  depends_on = [
+    docker_container.redis
+  ]
+}
+
+# redis/variables.tf
+variable "monitoring_network" {
+  description = "Name of the monitoring network"
+  type        = string
+}
+
+variable "traefik_network" {
+  description = "Name of the Traefik network"
+  type        = string
+}
+
+variable "redis_password" {
+  description = "Redis password for authentication"
+  type        = string
+  sensitive   = true
+}
+
+variable "max_memory" {
+  description = "Maximum memory Redis can use"
+  type        = string
+  default     = "256mb"
+}
+
+variable "eviction_policy" {
+  description = "Redis eviction policy"
+  type        = string
+  default     = "allkeys-lru"
+}
+
+
+===== FILE: ./redis/versions.tf =====
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
+  }
+}
+
+
+===== FILE: ./security/main.tf =====
+# security/main.tf
+resource "docker_container" "trivy" {
+  name     = "trivy"
+  hostname = "trivy"  # Expliciete hostname toevoegen
+  image    = "aquasec/trivy:latest"
+  restart  = "unless-stopped"
+
+  # Dynamische command opbouw met debug
+  command = concat(
+    [
+      "server",
+      "--listen", "0.0.0.0:8080",
+      "--cache-dir", "/trivy-cache",
+      "--debug"  # Debug logging toevoegen
+    ],
+    var.trivy_token != "" ? ["--token", var.trivy_token] : []
+  )
+
+  volumes {
+    host_path      = "/var/run/docker.sock"
+    container_path = "/var/run/docker.sock"
+  }
+
+  volumes {
+    host_path      = "${abspath(path.module)}/trivy-cache"
+    container_path = "/trivy-cache"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+
+  networks_advanced {
+    name = var.traefik_network
+  }
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.routers.trivy.rule"
+    value = "Host(`security.example.com`)"
+  }
+
+  labels {
+    label = "traefik.http.routers.trivy.entrypoints"
+    value = "https"
+  }
+
+  labels {
+    label = "traefik.http.routers.trivy.tls"
+    value = "true"
+  }
+
+  healthcheck {
+    test         = ["CMD", "wget", "--spider", "--quiet", "http://localhost:8080/health"]
+    interval     = "10s"  # Korter interval
+    timeout      = "5s"
+    retries      = 3
+    start_period = "10s"
+  }
+}
+
+# Automatische scanning service
+resource "docker_container" "security_scanner" {
+  name     = "security-scanner"
+  hostname = "security-scanner"  # Expliciete hostname toevoegen
+  image    = "alpine:latest"
+  restart  = "unless-stopped"
+
+  dns_search = ["traefik_network"]  # DNS search toevoegen
+
+  command = [
+    "/bin/sh", "-c",
+    <<-EOT
+      # Install required tools
+      apk update && \
+      apk add --no-cache \
+        curl \
+        jq \
+        dcron \
+        wget \
+        bind-tools  # Voor DNS debugging
+
+      # Create required directories
+      mkdir -p /scanner/results /scanner/metrics
+
+      # Test DNS resolving
+      echo "Testing DNS resolution for trivy..."
+      nslookup trivy || true
+
+      # Create scan script
+      cat > /scanner/scan.sh << 'EOF'
+      #!/bin/sh
+
+      echo "Starting vulnerability scan at $(date)"
+
+      # Ensure trivy server is available
+      echo "Testing connection to Trivy server..."
+      until wget --spider -q http://trivy:8080/health; do
+        echo "Waiting for Trivy server... ($(date))"
+        echo "Current DNS resolution:"
+        nslookup trivy || true
+        sleep 5
+      done
+
+      echo "Trivy server is available"
+
+      # Get list of running containers
+      echo "Fetching container list..."
+      containers=$(curl --unix-socket /var/run/docker.sock "http://localhost/containers/json" 2>/dev/null)
+
+      if [ -z "$${containers}" ]; then
+        echo "Error: Could not get container list"
+        exit 1
+      fi
+
+      # Initialize metrics file
+      echo "Initializing metrics..."
+      echo "# HELP security_vulnerabilities_total Total number of vulnerabilities by severity" > /scanner/metrics/vulnerabilities.prom
+      echo "# TYPE security_vulnerabilities_total gauge" >> /scanner/metrics/vulnerabilities.prom
+
+      total_high=0
+      total_critical=0
+
+      # Scan each container
+      echo "$${containers}" | jq -r '.[].Image' | while read -r image; do
+        echo "Scanning image: $${image}"
+
+        # Create result directory if it doesn't exist
+        mkdir -p "/scanner/results/$(date +%Y%m%d)"
+
+        # Run Trivy scan
+        echo "Running Trivy scan for $${image}..."
+        scan_result=$(curl -v -s -X POST "http://trivy:8080/scan" \
+          -H "Content-Type: application/json" \
+          -d "{\"image\":\"$${image}\"}" 2>/scanner/results/$(date +%Y%m%d)/curl_debug.log)
+
+        # Save full scan result
+        echo "$${scan_result}" > "/scanner/results/$(date +%Y%m%d)/$${image//\//_}.json"
+
+        # Parse vulnerabilities
+        high_vulns=$(echo "$${scan_result}" | jq '[.Results[] | select(.Vulnerabilities != null) | .Vulnerabilities[] | select(.Severity == "HIGH")] | length')
+        critical_vulns=$(echo "$${scan_result}" | jq '[.Results[] | select(.Vulnerabilities != null) | .Vulnerabilities[] | select(.Severity == "CRITICAL")] | length')
+
+        total_high=$((total_high + high_vulns))
+        total_critical=$((total_critical + critical_vulns))
+
+        if [ "$${high_vulns}" -gt 0 ] || [ "$${critical_vulns}" -gt 0 ]; then
+          echo "WARNING: Found $${high_vulns} HIGH and $${critical_vulns} CRITICAL vulnerabilities in $${image}"
+
+          # Export metrics for this image
+          echo "security_vulnerabilities_high_total{image=\"$${image}\"} $${high_vulns}" >> /scanner/metrics/vulnerabilities.prom
+          echo "security_vulnerabilities_critical_total{image=\"$${image}\"} $${critical_vulns}" >> /scanner/metrics/vulnerabilities.prom
+        fi
+      done
+
+      # Export total metrics
+      echo "security_vulnerabilities_high_total{image=\"total\"} $${total_high}" >> /scanner/metrics/vulnerabilities.prom
+      echo "security_vulnerabilities_critical_total{image=\"total\"} $${total_critical}" >> /scanner/metrics/vulnerabilities.prom
+
+      # Copy metrics to node exporter directory
+      cp /scanner/metrics/vulnerabilities.prom /metrics/vulnerabilities.prom
+
+      echo "Scan completed at $(date)"
+EOF
+
+      chmod +x /scanner/scan.sh
+
+      # Setup daily scan
+      mkdir -p /var/spool/cron/crontabs
+      echo "0 3 * * * /scanner/scan.sh >> /scanner/scan.log 2>&1" > /var/spool/cron/crontabs/root
+      chmod 0644 /var/spool/cron/crontabs/root
+
+      # Initial scan
+      echo "Running initial scan..."
+      /scanner/scan.sh
+
+      # Start cron
+      exec crond -f
+    EOT
+  ]
+
+  volumes {
+    host_path      = "/var/run/docker.sock"
+    container_path = "/var/run/docker.sock"
+  }
+
+  volumes {
+    host_path      = "${abspath(path.module)}/scanner-results"
+    container_path = "/scanner/results"
+  }
+
+  volumes {
+    host_path      = "${abspath(path.module)}/metrics"
+    container_path = "/scanner/metrics"
+  }
+
+  volumes {
+    host_path      = "${abspath(path.module)}/metrics"
+    container_path = "/metrics"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+
+  networks_advanced {
+    name = var.traefik_network  # Toevoegen aan traefik netwerk
+  }
+
+  healthcheck {
+    test         = ["CMD", "wget", "--spider", "--quiet", "http://trivy:8080/health"]
+    interval     = "30s"
+    timeout      = "10s"
+    retries      = 3
+    start_period = "40s"
+  }
+
+  depends_on = [
+    docker_container.trivy
+  ]
+}
+
+# Prometheus metrics exporter voor security scans
+resource "docker_container" "security_metrics" {
+  name  = "security-metrics"
+  image = "prom/node-exporter:latest"
+
+  command = [
+    "--path.rootfs=/host",
+    "--collector.textfile.directory=/metrics"
+  ]
+
+  volumes {
+    host_path      = "${abspath(path.module)}/metrics"
+    container_path = "/metrics"
+    read_only      = true
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+
+  labels {
+    label = "prometheus.io/scrape"
+    value = "true"
+  }
+
+  depends_on = [
+    docker_container.security_scanner
+  ]
+}
+
+
+===== FILE: ./security/variables.tf =====
+# security/variables.tf
+variable "monitoring_network" {
+  description = "Name of the monitoring network"
+  type        = string
+}
+
+variable "traefik_network" {
+  description = "Name of the Traefik network"
+  type        = string
+}
+
+variable "trivy_token" {
+  description = "API token for Trivy vulnerability scanner"
+  type        = string
+  sensitive   = true
+  default     = ""  # Maak de token optioneel voor development
+}
+
+
+===== FILE: ./security/versions.tf =====
+# security/versions.tf
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
+  }
+}
+
+
+===== FILE: ./traefik.tf =====
+resource "docker_container" "traefik" {
+  name  = "traefik"
+  image = "traefik:v2.4"
+
+  env = [
+    "TRAEFIK_PROVIDERS_DOCKER=true",
+    "TRAEFIK_API_INSECURE=false",
+    "TRAEFIK_API_DASHBOARD=true",
+    "TRAEFIK_ENTRYPOINTS_HTTP_ADDRESS=:80",
+    "TRAEFIK_ENTRYPOINTS_HTTPS_ADDRESS=:443",
+    "TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_EMAIL=${var.acme_email}",
+    "TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_STORAGE=/letsencrypt/acme.json",
+    "TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_HTTPCHALLENGE=true",
+    "TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_HTTPCHALLENGE_ENTRYPOINT=http",
+    "TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT=false",
+  ]
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.routers.api.rule"
+    value = "Host(`traefik.example.com`)"
+  }
+
+  labels {
+    label = "traefik.http.routers.api.service"
+    value = "api@internal"
+  }
+
+  labels {
+    label = "traefik.http.routers.api.entrypoints"
+    value = "https"
+  }
+
+  labels {
+    label = "traefik.http.routers.api.tls"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.routers.api.middlewares"
+    value = "auth"
+  }
+
+  volumes {
+    host_path      = "/var/run/docker.sock"
+    container_path = "/var/run/docker.sock"
+  }
+
+  volumes {
+    host_path      = "/absolute/path/to/letsencrypt"
+    container_path = "/letsencrypt"
+  }
+
+  ports {
+    internal = 80
+    external = 80
+  }
+
+  ports {
+    internal = 443
+    external = 443
+  }
+
+  ports {
+    internal = 8080
+    external = 8081
+  }
+
+  networks_advanced {
+    name = docker_network.traefik_network.name
+  }
+}
+
+
+
+===== FILE: ./variables.tf =====
+variable "docker_host" {
+  description = "Docker host address"
+  default     = "unix:///var/run/docker.sock"
+}
+
+variable "traefik_admin_auth" {
+  description = "Basic auth for Traefik dashboard (format: user:hashed_password)"
+  sensitive   = true
+}
+
+variable "acme_email" {
+  description = "Email address for Let's Encrypt certificates"
+  type        = string
+  default     = "robbrinkkemper@gmail.com"
+}
+
+variable "grafana_admin_user" {
+  description = "Grafana admin username"
+  type        = string
+  default     = "admin"
+}
+
+variable "grafana_admin_password" {
+  description = "Grafana admin password"
+  type        = string
+  sensitive   = true
+}
+variable "postgres_password" {
+  description = "PostgreSQL password for Keycloak database"
+  type        = string
+  sensitive   = true
+}
+
+variable "keycloak_admin_password" {
+  description = "Keycloak admin password"
+  type        = string
+  sensitive   = true
+
+}
+variable "redis_password" {
+  description = "Redis password for authentication"
+  type        = string
+  sensitive   = true
+} 
+variable "monitoring_network" {
+  description = "Name of the monitoring network"
+  type        = string
+}
+
+variable "traefik_network" {
+  description = "Name of the Traefik network"
+  type        = string
+}
+
+variable "minio_root_password" {
+  description = "MinIO root password"
+  type        = string
+  sensitive   = true
+}
+
+variable "couchdb_password" {
+  description = "CouchDB admin password"
+  type        = string
+  sensitive   = true
+}
+
+variable "couchdb_secret" {
+  description = "CouchDB cookie secret for cluster communication"
+  type        = string
+  sensitive   = true
+}
+
+# Voeg toe aan variables.tf:
+variable "backup_password" {
+  description = "Password for backup encryption"
+  type        = string
+  sensitive   = true
+}
+
+variable "s3_backup_bucket" {
+  description = "S3 bucket name for backups"
+  type        = string
+}
+
+variable "aws_access_key" {
+  description = "AWS access key for S3 backup storage"
+  type        = string
+  sensitive   = true
+}
+
+variable "aws_secret_key" {
+  description = "AWS secret key for S3 backup storage"
+  type        = string
+  sensitive   = true
+}
+
+# Voeg deze variabelen toe aan variables.tf:
+
+variable "postgres_user" {
+  description = "PostgreSQL username"
+  type        = string
+  default     = "keycloak"
+}
+
+variable "minio_root_user" {
+  description = "MinIO root username"
+  type        = string
+  default     = "admin"
+}
+
+variable "couchdb_user" {
+  description = "CouchDB admin username"
+  type        = string
+  default     = "admin"
+}
+
+variable "backup_retention_days" {
+  description = "Number of days to retain backups"
+  type        = number
+  default     = 30
+}
+
+
+===== FILE: ./vault/main.tf =====
+resource "local_file" "vault_config" {
+  filename = "${abspath(path.module)}/config/vault.hcl"
+  content  = <<-EOT
+    storage "file" {
+      path = "/vault/file"
+    }
+
+    listener "tcp" {
+      address     = "0.0.0.0:8600"
+      tls_disable = 1
+    }
+
+    api_addr = "http://0.0.0.0:8600"
+    ui       = true
+
+    telemetry {
+      prometheus_retention_time = "24h"
+      disable_hostname          = true
+    }
+  EOT
+}
+
+resource "docker_container" "vault" {
+  name  = "vault"
+  image = "hashicorp/vault:1.18.2"
+
+  capabilities {
+    add = ["IPC_LOCK"]
+  }
+
+  command = [
+    "vault", "server", "-config=/vault/config/vault.hcl"
+  ]
+
+  env = [
+    "VAULT_ADDR=http://0.0.0.0:8600",
+    "VAULT_API_ADDR=http://0.0.0.0:8600"
+  ]
+
+  volumes {
+    host_path      = "${abspath(path.module)}/vault-data"
+    container_path = "/vault/file"
+  }
+
+  volumes {
+    host_path      = local_file.vault_config.filename
+    container_path = "/vault/config/vault.hcl"
+    read_only      = true
+  }
+
+  volumes {
+    host_path      = "${abspath(path.module)}/logs"
+    container_path = "/vault/logs"
+  }
+
+  ports {
+    internal = 8600
+    external = 8600
+  }
+
+  lifecycle {
+    prevent_destroy = true
+    # Als het nodig is, kun je hier ignore_changes toevoegen.
+    # ignore_changes = [
+    #   image
+    # ]
+  }
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.routers.vault.rule"
+    value = "Host(`vault.example.com`)"
+  }
+
+  labels {
+    label = "traefik.http.routers.vault.entrypoints"
+    value = "https"
+  }
+
+  labels {
+    label = "traefik.http.routers.vault.tls"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.services.vault.loadbalancer.server.port"
+    value = "8600"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+
+  networks_advanced {
+    name = var.traefik_network
+  }
+
+  healthcheck {
+    test         = ["CMD", "vault", "status"]
+    interval     = "10s"
+    timeout      = "5s"
+    retries      = 3
+    start_period = "10s"
+  }
+}
+
+
+
+===== FILE: ./vault/variables.tf =====
+# vault/variables.tf
+
+variable "monitoring_network" {
+  description = "Name of the monitoring network"
+  type        = string
+}
+
+variable "traefik_network" {
+  description = "Name of the Traefik network"
+  type        = string
+}
+
+
+
+===== FILE: ./vault/versions.tf =====
+# vault/versions.tf
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
+  }
+}
+
+
+Collecting .sh scripts...
+
+
+===== FILE: ./backup/backup-data/backup.sh =====
+      #!/bin/sh
+      
+      # Set timestamp
+      TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+      
+      echo "Starting backup process - ${TIMESTAMP}"
+      
+      # Create temp directory for this backup
+      BACKUP_DIR="/backup/temp/${TIMESTAMP}"
+      mkdir -p ${BACKUP_DIR}
+      
+      # Backup PostgreSQL
+      echo "Backing up PostgreSQL..."
+      PGPASSWORD=${POSTGRES_PASSWORD} pg_dump -h postgres -U ${POSTGRES_USER} -d keycloak > ${BACKUP_DIR}/postgres_keycloak.sql
+      
+      # Backup CouchDB
+      echo "Backing up CouchDB..."
+      curl -u ${COUCHDB_USER}:${COUCHDB_PASSWORD} -X GET http://couchdb:5984/_all_dbs | jq -r '.[]' | \
+        while read -r db; do
+          curl -u ${COUCHDB_USER}:${COUCHDB_PASSWORD} -X GET "http://couchdb:5984/${db}/_all_docs?include_docs=true" \
+            > ${BACKUP_DIR}/couchdb_${db}.json
+        done
+      
+      # Backup Redis
+      echo "Backing up Redis..."
+      redis-cli -h redis -a ${REDIS_PASSWORD} --rdb ${BACKUP_DIR}/redis_dump.rdb
+      
+      # Create restic backup
+      echo "Creating restic backup..."
+      restic -r s3:s3.amazonaws.com/${S3_BACKUP_BUCKET}/restic backup ${BACKUP_DIR}
+      
+      # Cleanup old backups
+      echo "Cleaning up old backups..."
+      restic -r s3:s3.amazonaws.com/${S3_BACKUP_BUCKET}/restic forget \
+        --keep-last 7 \
+        --keep-daily 7 \
+        --keep-weekly 4 \
+        --keep-monthly 6 \
+        --prune
+      
+      # Cleanup temp directory
+      rm -rf ${BACKUP_DIR}
+      
+      echo "Backup completed successfully"
+
+
+===== FILE: ./check_vault_health.sh =====
+#!/usr/bin/env bash
+
+CONTAINER_ID="369924f9bb05"
+
+while true; do
+    # Haal de health status op via docker inspect
+    HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_ID")
+
+    if [ "$HEALTH_STATUS" = "healthy" ]; then
+        echo "De Vault container is nu healthy!"
+        break
+    else
+        echo "Vault container is nog niet gezond (status: $HEALTH_STATUS). Nog even wachten..."
+        sleep 10
+    fi
+done
+
+
+
+===== FILE: ./cleanup.sh =====
+#!/bin/bash
+# cleanup.sh
+
+# Remove existing directories and files
+rm -rf /home/rob/repos/infrastructure/terraform/logging/config
+rm -rf /home/rob/repos/infrastructure/terraform/logging/loki-data
+
+# Create parent directories
+mkdir -p /home/rob/repos/infrastructure/terraform/logging/config
+mkdir -p /home/rob/repos/infrastructure/terraform/logging/loki-data
+
+
+===== FILE: ./docker_purge.sh =====
+#!/bin/bash
+
+# Controleer of Docker is geïnstalleerd
+if ! command -v docker &> /dev/null
+then
+    echo "Docker is niet geïnstalleerd. Installeer Docker voordat je dit script uitvoert."
+    exit 1
+fi
+
+# Stop alle draaiende containers
+echo "Bezig met stoppen van alle draaiende Docker-containers..."
+RUNNING_CONTAINERS=$(docker ps -q)
+
+if [ -n "$RUNNING_CONTAINERS" ]; then
+    docker stop $RUNNING_CONTAINERS
+    echo "Alle draaiende containers zijn gestopt."
+else
+    echo "Er zijn geen draaiende containers om te stoppen."
+fi
+
+# Verwijder alle containers (zowel draaiend als gestoppt)
+echo "Bezig met verwijderen van alle Docker-containers..."
+ALL_CONTAINERS=$(docker ps -a -q)
+
+if [ -n "$ALL_CONTAINERS" ]; then
+    docker rm $ALL_CONTAINERS
+    echo "Alle containers zijn verwijderd."
+else
+    echo "Er zijn geen containers om te verwijderen."
+fi
+
+echo "Docker purge is voltooid."
+
+
+
+===== FILE: ./initialize_vault.sh =====
+#!/bin/bash
+
+# =============================================================================
+# Script: initialize_vault.sh
+# Doel: Automatisch initialiseren en ontzegelen van HashiCorp Vault
+# Auteur: Rob Brinkkemper
+# Datum: 2024-12-09
+# =============================================================================
+
+# Foutenafhandeling
+set -e
+
+# Functie om fouten af te handelen
+handle_error() {
+  echo "❌ Fout opgetreden op regel $1"
+  echo "Laatste commando exit status: $?"
+  echo "Stack trace:"
+  local frame=0
+  while caller $frame; do
+    ((frame++))
+  done
+  exit 1
+}
+
+# Trap-functie om fouten op te vangen
+trap 'handle_error $LINENO' ERR
+
+# Functie om de Vault status te controleren met curl
+check_vault_status() {
+  local response
+  local status_code
+  
+  echo "🔍 Controleer Vault status via HTTP API..."
+  
+  response=$(curl -s -w "\n%{http_code}" $VAULT_ADDR/v1/sys/seal-status)
+  status_code=$(echo "$response" | tail -n1)
+  response_body=$(echo "$response" | head -n-1)
+  
+  echo "Debug: HTTP Status Code: $status_code"
+  echo "Debug: Response Body: $response_body"
+  
+  if [ "$status_code" = "200" ]; then
+    echo "✔️ Vault is bereikbaar en reageert"
+    
+    # Parse status informatie
+    initialized=$(echo "$response_body" | jq -r '.initialized')
+    sealed=$(echo "$response_body" | jq -r '.sealed')
+    
+    echo "📊 Vault Status:"
+    echo "- Geïnitialiseerd: $initialized"
+    echo "- Verzegeld: $sealed"
+    
+    VAULT_INITIALIZED=$initialized
+    VAULT_SEALED=$sealed
+  else
+    echo "❌ Kan geen verbinding maken met Vault. Status code: $status_code"
+    return 1
+  fi
+}
+
+# =============================================================================
+# Start van het script
+# =============================================================================
+echo "🚀 Start Vault initialisatie script..."
+echo
+
+# =============================================================================
+# Stap 1: Stel de Vault adresomgeving in
+# =============================================================================
+echo "🔧 Stel VAULT_ADDR in..."
+export VAULT_ADDR='http://127.0.0.1:8600'
+echo "✔️ VAULT_ADDR ingesteld op $VAULT_ADDR"
+echo
+
+# =============================================================================
+# Stap 2: Controleer of Vault bereikbaar is
+# =============================================================================
+echo "🔄 Controleer of Vault bereikbaar is..."
+
+# Installeer jq als het nog niet aanwezig is
+if ! command -v jq &> /dev/null; then
+    echo "📦 Installeer jq..."
+    sudo apt-get update && sudo apt-get install -y jq
+fi
+
+RETRIES=10
+COUNT=0
+until curl -s -f $VAULT_ADDR/v1/sys/health > /dev/null; do
+  echo "⏳ Wachten op Vault... Poging $((COUNT + 1))/$RETRIES"
+  sleep 5
+  COUNT=$((COUNT + 1))
+  if [ $COUNT -ge $RETRIES ]; then
+    echo "❌ Vault is niet bereikbaar na $RETRIES pogingen. Script wordt gestopt."
+    exit 1
+  fi
+done
+
+echo "✔️ Vault is bereikbaar"
+echo
+
+# =============================================================================
+# Stap 3: Controleer de Vault status
+# =============================================================================
+check_vault_status
+
+# =============================================================================
+# Stap 4: Handel dev mode af
+# =============================================================================
+echo "🔍 Controleer of Vault in development mode draait..."
+
+dev_mode_check=$(curl -s $VAULT_ADDR/v1/sys/seal-status | jq -r '.type')
+if [[ "$dev_mode_check" == "shamir" ]] && [[ "$VAULT_SEALED" == "false" ]]; then
+    echo "ℹ️ Vault draait in development mode"
+    echo "Root Token: root"
+    echo
+    echo "⚠️ Let op: Development mode is niet veilig voor productie!"
+    echo "✔️ Vault is klaar voor gebruik in development mode"
+    exit 0
+fi
+
+# =============================================================================
+# Stap 5: Initialiseer Vault indien nodig
+# =============================================================================
+if [[ "$VAULT_INITIALIZED" == "false" ]]; then
+    echo "🔧 Vault is niet geïnitialiseerd. Start initialisatie..."
+    
+    # Initialiseer Vault en bewaar de output
+    init_output=$(curl -s -X POST -d '{"secret_shares": 1, "secret_threshold": 1}' $VAULT_ADDR/v1/sys/init)
+    
+    # Controleer of initialisatie succesvol was
+    if echo "$init_output" | grep -q "errors"; then
+      echo "❌ Fout bij het initialiseren van Vault:"
+      echo "$init_output"
+      exit 1
+    fi
+    
+    # Bewaar keys en token
+    echo "$init_output" | jq -r '.keys_base64[]' > vault_keys.txt
+    echo "$init_output" | jq -r '.root_token' > vault_root_token.txt
+    
+    echo "✔️ Vault geïnitialiseerd"
+    echo "📝 Keys opgeslagen in vault_keys.txt"
+    echo "🔑 Root token opgeslagen in vault_root_token.txt"
+    
+    echo "⚠️ BELANGRIJK: Bewaar deze bestanden op een veilige plaats!"
+fi
+
+# =============================================================================
+# Stap 6: Vault UI Toegang
+# =============================================================================
+echo
+echo "🌐 Vault is nu toegankelijk via:"
+echo "📍 UI: https://vault.example.com"
+echo "🔑 API: $VAULT_ADDR"
+echo
+echo "✨ Vault setup voltooid!"
+
+
+
+===== FILE: ./print-tffiles.sh =====
+#!/bin/bash
+
+# Script: generate_summary.sh
+# Doel: Genereer een overzicht van alle .tf bestanden in de opgegeven map met hun inhoud.
+
+# Bestand waarin de samenvatting wordt opgeslagen
+OUTPUT_FILE="project_summary.txt"
+
+# Map waarin de .tf bestanden zich bevinden
+TF_DIRECTORY="$HOME/repos/infrastructure/terraform"
+
+# Verwijder het oude samenvattingsbestand als het bestaat
+if [ -f "$OUTPUT_FILE" ]; then
+    rm "$OUTPUT_FILE"
+fi
+
+# Begin met het schrijven van de samenvatting
+echo "Project Samenvatting - $(date)" > "$OUTPUT_FILE"
+echo "====================================" >> "$OUTPUT_FILE"
+echo "" >> "$OUTPUT_FILE"
+
+# Functie om absolute pad te krijgen
+get_absolute_path() {
+    realpath "$1" 2>/dev/null
+}
+
+# Vind alle .tf bestanden in de opgegeven map
+TF_FILES=$(find "$TF_DIRECTORY" -type f -name "*.tf")
+
+# Controleer of er .tf bestanden zijn gevonden
+if [ -z "$TF_FILES" ]; then
+    echo "Geen .tf bestanden gevonden in $TF_DIRECTORY"
+    exit 1
+fi
+
+# Itereer over de gevonden .tf bestanden
+for FILE in $TF_FILES; do
+    if [ -e "$FILE" ]; then
+        REL_PATH="${FILE#$HOME/}"
+        ABS_PATH=$(get_absolute_path "$FILE")
+        echo "### $REL_PATH" >> "$OUTPUT_FILE"
+        echo "Pad: $ABS_PATH" >> "$OUTPUT_FILE"
+        echo "------------------------------------" >> "$OUTPUT_FILE"
+        echo "" >> "$OUTPUT_FILE"
+
+        # Voeg de inhoud van het bestand toe
+        cat "$FILE" >> "$OUTPUT_FILE"
+        echo "" >> "$OUTPUT_FILE"
+        echo "====================================" >> "$OUTPUT_FILE"
+        echo "" >> "$OUTPUT_FILE"
+    else
+        echo "Waarschuwing: $FILE bestaat niet en wordt overgeslagen."
+    fi
+done
+
+echo "Samenvatting gegenereerd in $OUTPUT_FILE"
+
+
+
+===== FILE: ./reinitialize_vault.sh =====
+#!/bin/bash
+
+# =============================================================================
+# Script: reinitialize_vault.sh
+# Doel: Herinitialiseren en ontzegelen van HashiCorp Vault
+# Auteur: Rob Brinkkemper
+# Datum: 2024-12-09
+# =============================================================================
+
+# Foutenafhandeling
+set -e
+
+# Functie om fouten af te handelen
+handle_error() {
+  echo "❌ Fout opgetreden op regel $1"
+  echo "Laatste commando exit status: $?"
+  exit 1
+}
+
+# Trap-functie om fouten op te vangen
+trap 'handle_error $LINENO' ERR
+
+# Functie om de Vault status te controleren met de Vault CLI
+check_vault_status() {
+  echo "🔍 Controleer Vault status via Vault CLI..."
+
+  VAULT_STATUS=$(vault status 2>&1)
+
+  # Check of het 'vault status' commando succesvol was
+  if echo "$VAULT_STATUS" | grep -q "Error"; then
+    echo "❌ Fout bij het ophalen van Vault status:"
+    echo "$VAULT_STATUS"
+    exit 1
+  fi
+
+  echo "$VAULT_STATUS"
+  echo
+
+  # Extract de status waarden
+  VAULT_INITIALIZED=$(echo "$VAULT_STATUS" | grep "Initialized" | awk '{print $2}')
+  VAULT_SEALED=$(echo "$VAULT_STATUS" | grep "Sealed" | awk '{print $2}')
+
+  echo "📊 Vault Status:"
+  echo "- Geïnitialiseerd: $VAULT_INITIALIZED"
+  echo "- Verzegeld: $VAULT_SEALED"
+  echo
+}
+
+# =============================================================================
+# Start van het script
+# =============================================================================
+echo "🚀 Start herinitialisatie Vault script..."
+echo
+
+# =============================================================================
+# Stap 1: Stel de Vault adresomgeving in
+# =============================================================================
+echo "🔧 Stel VAULT_ADDR in..."
+export VAULT_ADDR='http://127.0.0.1:8600'
+echo "✔️ VAULT_ADDR ingesteld op $VAULT_ADDR"
+echo
+
+# =============================================================================
+# Stap 2: Controleer of Vault bereikbaar is
+# =============================================================================
+echo "🔄 Controleer of Vault bereikbaar is..."
+
+# Installeer jq als het nog niet aanwezig is
+if ! command -v jq &> /dev/null; then
+    echo "📦 Installeer jq..."
+    sudo apt-get update && sudo apt-get install -y jq
+fi
+
+RETRIES=10
+COUNT=0
+until vault status > /dev/null 2>&1; do
+  echo "⏳ Wachten op Vault... Poging $((COUNT + 1))/$RETRIES"
+  sleep 5
+  COUNT=$((COUNT + 1))
+  if [ $COUNT -ge $RETRIES ]; then
+    echo "❌ Vault is niet bereikbaar na $RETRIES pogingen. Script wordt gestopt."
+    exit 1
+  fi
+done
+
+echo "✔️ Vault is bereikbaar"
+echo
+
+# =============================================================================
+# Stap 3: Controleer de Vault status
+# =============================================================================
+check_vault_status
+
+# =============================================================================
+# Stap 4: Initialiseer Vault indien niet geïnitieerd
+# =============================================================================
+if [[ "$VAULT_INITIALIZED" == "false" ]]; then
+    echo "🔧 Vault is niet geïnitialiseerd. Start initialisatie..."
+
+    # Initialiseer Vault met 1 share en 1 threshold
+    init_output=$(vault operator init -key-shares=1 -key-threshold=1)
+
+    # Controleer of initialisatie succesvol was
+    if echo "$init_output" | grep -q "Error"; then
+      echo "❌ Fout bij het initialiseren van Vault:"
+      echo "$init_output"
+      exit 1
+    fi
+
+    # Bewaar keys en token
+    echo "$init_output" | grep "Unseal Key" | awk '{print $NF}' > vault_keys.txt
+    echo "$init_output" | grep "Initial Root Token" | awk '{print $NF}' > vault_root_token.txt
+
+    echo "✔️ Vault geïnitialiseerd"
+    echo "📝 Keys opgeslagen in vault_keys.txt"
+    echo "🔑 Root token opgeslagen in vault_root_token.txt"
+
+    echo "⚠️ BELANGRIJK: Bewaar deze bestanden op een veilige plaats!"
+
+    # Ontzegel Vault met de unseal key
+    UNSEAL_KEY=$(head -n1 vault_keys.txt)
+    echo "🔓 Ontzegel Vault met de unseal key..."
+    vault operator unseal "$UNSEAL_KEY"
+
+    echo "✔️ Vault is succesvol ontzegeld."
+    echo
+else
+    echo "✅ Vault is al geïnitialiseerd."
+    echo
+fi
+
+# =============================================================================
+# Stap 5: Controleer de Vault status opnieuw
+# =============================================================================
+echo "🔍 Controleer Vault status na initialisatie en/of ontzegeling..."
+vault status
+echo
+
+# =============================================================================
+# Stap 6: Vault UI Toegang
+# =============================================================================
+echo "🌐 Vault is nu toegankelijk via:"
+echo "📍 UI: https://vault.example.com"
+echo "🔑 API: $VAULT_ADDR"
+echo
+
+echo "✨ Vault setup voltooid!"
+
+
+
+===== FILE: ./setup.sh =====
+#!/bin/bash
+
+# Basisdirectory instellen (aanpassen indien nodig)
+BASE_DIR="./logging"
+
+# Mappen aanmaken
+echo "Mappen aanmaken..."
+mkdir -p "$BASE_DIR/config"
+
+# Bestanden aanmaken met de opgegeven inhoud
+
+# logging/versions.tf
+cat <<EOF > "$BASE_DIR/versions.tf"
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
+  }
+}
+EOF
+echo "Bestand aangemaakt: $BASE_DIR/versions.tf"
+
+# logging/variables.tf
+cat <<EOF > "$BASE_DIR/variables.tf"
+variable "monitoring_network" {
+  description = "Name of the monitoring network"
+  type        = string
+}
+
+variable "traefik_network" {
+  description = "Name of the Traefik network"
+  type        = string
+}
+
+variable "logging_network" {
+  description = "Name of the logging network"
+  type        = string
+}
+
+variable "retention_period" {
+  description = "Log retention period in days"
+  type        = number
+  default     = 30
+}
+EOF
+echo "Bestand aangemaakt: $BASE_DIR/variables.tf"
+
+# logging/loki.tf
+cat <<EOF > "$BASE_DIR/loki.tf"
+resource "docker_container" "loki" {
+  name  = "loki"
+  image = "grafana/loki:latest"
+
+  command = ["-config.file=/etc/loki/local-config.yaml"]
+
+  volumes {
+    host_path      = "\${abspath(path.module)}/config/loki-config.yaml"
+    container_path = "/etc/loki/local-config.yaml"
+    read_only      = true
+  }
+
+  volumes {
+    host_path      = "\${abspath(path.module)}/loki-data"
+    container_path = "/loki"
+  }
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.routers.loki.rule"
+    value = "Host(\`loki.example.com\`)"
+  }
+
+  labels {
+    label = "traefik.http.routers.loki.entrypoints"
+    value = "https"
+  }
+
+  labels {
+    label = "traefik.http.routers.loki.tls"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.services.loki.loadbalancer.server.port"
+    value = "3100"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+
+  networks_advanced {
+    name = var.traefik_network
+  }
+
+  networks_advanced {
+    name = var.logging_network
+  }
+
+  healthcheck {
+    test         = ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
+    interval     = "10s"
+    timeout      = "5s"
+    retries      = 3
+    start_period = "10s"
+  }
+}
+EOF
+echo "Bestand aangemaakt: $BASE_DIR/loki.tf"
+
+# logging/promtail.tf
+cat <<EOF > "$BASE_DIR/promtail.tf"
+resource "docker_container" "promtail" {
+  name  = "promtail"
+  image = "grafana/promtail:latest"
+
+  command = ["-config.file=/etc/promtail/config.yml"]
+
+  volumes {
+    host_path      = "\${abspath(path.module)}/config/promtail-config.yml"
+    container_path = "/etc/promtail/config.yml"
+    read_only      = true
+  }
+
+  volumes {
+    host_path      = "/var/log"
+    container_path = "/var/log"
+    read_only      = true
+  }
+
+  volumes {
+    host_path      = "/var/lib/docker/containers"
+    container_path = "/var/lib/docker/containers"
+    read_only      = true
+  }
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+
+  networks_advanced {
+    name = var.logging_network
+  }
+
+  healthcheck {
+    test         = ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9080/ready || exit 1"]
+    interval     = "10s"
+    timeout      = "5s"
+    retries      = 3
+    start_period = "10s"
+  }
+
+  depends_on = [
+    docker_container.loki
+  ]
+}
+EOF
+echo "Bestand aangemaakt: $BASE_DIR/promtail.tf"
+
+# logging/config/loki-config.yaml
+cat <<'EOF' > "$BASE_DIR/config/loki-config.yaml"
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+ingester:
+  lifecycler:
+    address: 127.0.0.1
+    ring:
+      kvstore:
+        store: inmemory
+      replication_factor: 1
+    final_sleep: 0s
+  chunk_idle_period: 5m
+  chunk_retain_period: 30s
+
+schema_config:
+  configs:
+    - from: 2020-01-01
+      store: boltdb
+      object_store: filesystem
+      schema: v11
+      index:
+        prefix: index_
+        period: 24h
+
+storage_config:
+  boltdb:
+    directory: /loki/index
+
+  filesystem:
+    directory: /loki/chunks
+
+limits_config:
+  enforce_metric_name: false
+  reject_old_samples: true
+  reject_old_samples_max_age: ${var.retention_period * 24}h
+
+chunk_store_config:
+  max_look_back_period: ${var.retention_period * 24}h
+
+table_manager:
+  retention_deletes_enabled: true
+  retention_period: ${var.retention_period * 24}h
+EOF
+echo "Bestand aangemaakt: $BASE_DIR/config/loki-config.yaml"
+
+# logging/config/promtail-config.yml
+cat <<'EOF' > "$BASE_DIR/config/promtail-config.yml"
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: varlogs
+          __path__: /var/log/*log
+
+  - job_name: containers
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: containerlogs
+          __path__: /var/lib/docker/containers/*/*log
+EOF
+echo "Bestand aangemaakt: $BASE_DIR/config/promtail-config.yml"
+
+echo "Alle bestanden en mappen zijn succesvol aangemaakt."
+
+
+
+===== FILE: ./vault/initialize_vault.sh =====
+#!/bin/bash
+
+# =============================================================================
+# Script: initialize_vault.sh
+# Doel: Automatisch initialiseren en ontzegelen van HashiCorp Vault
+# Auteur: Rob Brinkkemper
+# Datum: 2024-12-09
+# =============================================================================
+
+# Functie om fouten af te handelen
+handle_error() {
+  echo "Fout opgetreden op regel $1"
+  exit 1
+}
+
+# Trap-functie om fouten op te vangen
+trap 'handle_error $LINENO' ERR
+
+# =============================================================================
+# Stap 1: Stel de Vault adresomgeving in
+# =============================================================================
+echo "Stel VAULT_ADDR in..."
+export VAULT_ADDR='http://127.0.0.1:8600'
+echo "VAULT_ADDR ingesteld op $VAULT_ADDR"
+echo
+
+# =============================================================================
+# Stap 2: Controleer of Vault bereikbaar is
+# =============================================================================
+echo "Controleer of Vault bereikbaar is..."
+# Wacht tot Vault een response geeft op de health endpoint
+RETRIES=10
+COUNT=0
+until curl -s $VAULT_ADDR/v1/sys/health | grep -q '"initialized":true'; do
+  echo "Vault is nog niet bereikbaar. Wachten..."
+  sleep 5
+  COUNT=$((COUNT + 1))
+  if [ $COUNT -ge $RETRIES ]; then
+    echo "Vault is niet bereikbaar na $RETRIES pogingen. Script wordt gestopt."
+    exit 1
+  fi
+done
+echo "Vault is bereikbaar."
+echo
+
+# =============================================================================
+# Stap 3: Controleer de Vault status
+# =============================================================================
+echo "Controleer Vault status..."
+# Sla de output van 'vault status' op
+VAULT_STATUS=$(vault status 2>&1)
+
+# Check of het 'vault status' commando succesvol was
+if echo "$VAULT_STATUS" | grep -q "Error"; then
+  echo "Fout bij het ophalen van Vault status:"
+  echo "$VAULT_STATUS"
+  exit 1
+fi
+
+echo "$VAULT_STATUS"
+echo
+
+# Extract de status waarden
+INITIALIZED=$(echo "$VAULT_STATUS" | grep "Initialized" | awk '{print $2}')
+SEALED=$(echo "$VAULT_STATUS" | grep "Sealed" | awk '{print $2}')
+
+echo "INITIALIZED: $INITIALIZED"
+echo "SEALED: $SEALED"
+echo
+
+# =============================================================================
+# Stap 4: Initialiseer Vault indien nog niet geïnitialiseerd
+# =============================================================================
+if [ "$INITIALIZED" == "false" ]; then
+  echo "Vault is nog niet geïnitialiseerd. Initialiseren wordt gestart..."
+  
+  # Initialiseer Vault met 1 share en 1 threshold
+  INIT_OUTPUT=$(vault operator init -key-shares=1 -key-threshold=1 2>&1)
+  
+  # Controleer of initialisatie succesvol was
+  if echo "$INIT_OUTPUT" | grep -q "Error"; then
+    echo "Fout bij het initialiseren van Vault:"
+    echo "$INIT_OUTPUT"
+    exit 1
+  fi
+  
+  echo "Vault is geïnitialiseerd."
+  echo
+  
+  # =============================================================================
+  # Stap 5: Extract en bewaar de unseal key en root token
+  # =============================================================================
+  echo "Extracten van unseal key en root token..."
+  
+  # Extract unseal key
+  UNSEAL_KEY=$(echo "$INIT_OUTPUT" | grep "Unseal Key 1" | awk '{print $NF}')
+  
+  # Extract root token
+  ROOT_TOKEN=$(echo "$INIT_OUTPUT" | grep "Initial Root Token" | awk '{print $NF}')
+  
+  echo "Unseal Key en Root Token zijn gegenereerd."
+  echo
+  
+  # =============================================================================
+  # Stap 6: Veilig opslaan van de sleutels
+  # =============================================================================
+  echo "⚠️ BELANGRIJK ⚠️"
+  echo "Bewaar de volgende unseal key en root token veilig. Ze zijn essentieel voor de toegang tot Vault."
+  echo "Kopieer ze naar een veilige locatie, zoals een beveiligd tekstbestand of een kluis."
+  echo
+  echo "========================================"
+  echo "Unseal Key:"
+  echo "$UNSEAL_KEY"
+  echo "========================================"
+  echo
+  echo "========================================"
+  echo "Root Token:"
+  echo "$ROOT_TOKEN"
+  echo "========================================"
+  echo
+  echo "Wil je de sleutels automatisch opslaan in bestanden? (y/n)"
+  read -r SAVE_KEYS
+  if [ "$SAVE_KEYS" == "y" ] || [ "$SAVE_KEYS" == "Y" ]; then
+    echo "$UNSEAL_KEY" > ./unseal_key.txt
+    echo "$ROOT_TOKEN" > ./root_token.txt
+    echo "Unseal Key en Root Token zijn opgeslagen in unseal_key.txt en root_token.txt"
+    echo "Zorg ervoor dat deze bestanden veilig zijn."
+  fi
+  
+  echo "Druk op ENTER nadat je de sleutels veilig hebt opgeslagen."
+  read -r
+  
+  # =============================================================================
+  # Stap 7: Ontzegel Vault met de unseal key
+  # =============================================================================
+  echo "Ontzegel Vault met de unseal key..."
+  
+  # Ontzegel met de unseal key
+  vault operator unseal "$UNSEAL_KEY"
+  
+  echo "Vault is nu ontzegeld."
+  echo
+
+# =============================================================================
+# Stap 8: Ontzegel Vault indien al geïnitialiseerd maar verzegeld
+# =============================================================================
+elif [ "$SEALED" == "true" ]; then
+  echo "Vault is geïnitialiseerd maar verzegeld. Ontzegelen wordt gestart."
+  
+  # Prompt de gebruiker voor de unseal key
+  echo "Voer de unseal key in om Vault te ontzegelen."
+  read -s -p "Unseal Key: " UNSEAL_KEY_INPUT
+  echo
+  
+  # Trim whitespace from input
+  UNSEAL_KEY_INPUT=$(echo "$UNSEAL_KEY_INPUT" | xargs)
+  
+  # Controleer of de unseal key niet leeg is
+  if [ -z "$UNSEAL_KEY_INPUT" ]; then
+    echo "Geen unseal key ingevoerd. Script wordt gestopt."
+    exit 1
+  fi
+  
+  # Ontzegel met de ingevoerde unseal key
+  vault operator unseal "$UNSEAL_KEY_INPUT"
+  
+  # Controleer of unseal succesvol was
+  NEW_STATUS=$(vault status | grep "Sealed" | awk '{print $2}')
+  
+  if [ "$NEW_STATUS" == "false" ]; then
+    echo "Vault is nu ontzegeld."
+  else
+    echo "Vault is nog steeds verzegeld. Controleer de unseal key en probeer opnieuw."
+    exit 1
+  fi
+  
+  echo
+# =============================================================================
+# Stap 9: Vault is al geïnitialiseerd en niet verzegeld
+# =============================================================================
+else
+  echo "Vault is al geïnitialiseerd en niet verzegeld. Niets te doen."
+  echo
+fi
+
+# =============================================================================
+# Stap 10: Controleer de Vault status opnieuw
+# =============================================================================
+echo "Controleer Vault status na initialisatie en/of ontzegeling..."
+vault status
+echo
+
+# =============================================================================
+# Stap 11: Toegang tot de Vault UI via Traefik
+# =============================================================================
+echo "Vault is nu toegankelijk via de UI via Traefik op:"
+echo "https://vault.example.com"
+echo "Gebruik het root token om in te loggen via de UI."
+echo
+
+echo "✔️ Vault initialisatie en ontzegeling voltooid."
+
+
+
+===== FILE: ./vi_tf.sh =====
+#!/bin/bash
+
+# Map waarin de Terraform-bestanden zich bevinden
+TF_DIRECTORY="$HOME/repos/infrastructure/terraform"
+
+# Controleer of de map bestaat
+if [ ! -d "$TF_DIRECTORY" ]; then
+    echo "De map $TF_DIRECTORY bestaat niet. Controleer het pad en probeer opnieuw."
+    exit 1
+fi
+
+# Zoek alle Terraform-bestanden (.tf) in de map en submappen
+TF_FILES=$(find "$TF_DIRECTORY" -type f -name "*.tf")
+
+# Controleer of er .tf-bestanden zijn gevonden
+if [ -z "$TF_FILES" ]; then
+    echo "Geen .tf-bestanden gevonden in $TF_DIRECTORY."
+    exit 0
+fi
+
+# Itereer over elk .tf-bestand
+for FILE in $TF_FILES; do
+    # Maak het bestand leeg
+    > "$FILE"
+    echo "Bestand leeggemaakt: $FILE"
+    
+    # Open het bestand met vi voor bewerking
+    vi "$FILE"
+done
+
+echo "Alle bestanden zijn leeggemaakt en geopend in vi."
+
+
+
+Collecting .py scripts...
+
+
+===== FILE: ./change_tf.py =====
+#!/usr/bin/env python3
+import os
+from pathlib import Path
+
+def update_networks_file():
+    content = '''# Network resources
+resource "docker_network" "traefik_network" {
+  name       = "traefik_network"
+  driver     = "overlay"
+  attachable = true
+}
+
+resource "docker_network" "monitoring_network" {
+  name       = "monitoring_network"
+  driver     = "overlay"
+  attachable = true
+}'''
+    
+    with open('networks.tf', 'w') as f:
+        f.write(content)
+    print("Updated networks.tf")
+
+def update_monitoring_variables():
+    content = '''variable "traefik_network" {
+  description = "Name of the Traefik network"
+  type        = string
+}
+
+variable "monitoring_network" {
+  description = "Name of the monitoring network"
+  type        = string
+}
+
+variable "grafana_admin_user" {
+  description = "Grafana admin username"
+  type        = string
+  default     = "admin"
+}
+
+variable "grafana_admin_password" {
+  description = "Grafana admin password"
+  type        = string
+  sensitive   = true
+}'''
+    
+    with open('monitoring/variables.tf', 'w') as f:
+        f.write(content)
+    print("Updated monitoring/variables.tf")
+
+def update_main_module():
+    content = '''module "monitoring" {
+  source = "./monitoring"
+  traefik_network = docker_network.traefik_network.name
+  monitoring_network = docker_network.monitoring_network.name
+  grafana_admin_user = var.grafana_admin_user
+  grafana_admin_password = var.grafana_admin_password
+}'''
+    
+    # Read existing main.tf
+    with open('main.tf', 'r') as f:
+        main_content = f.read()
+    
+    # Replace the module block
+    import re
+    updated_content = re.sub(
+        r'module "monitoring".*?\}',
+        content,
+        main_content,
+        flags=re.DOTALL
+    )
+    
+    with open('main.tf', 'w') as f:
+        f.write(updated_content)
+    print("Updated main.tf")
+
+def update_monitoring_files():
+    files = ['cadvisor.tf', 'grafana.tf', 'node_exporter.tf', 'prometheus.tf']
+    
+    for file in files:
+        path = f'monitoring/{file}'
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                content = f.read()
+            
+            # Update network configuration
+            if 'networks_advanced {' in content:
+                content = content.replace(
+                    'networks_advanced {',
+                    '''networks_advanced {
+    name = var.monitoring_network
+  }
+  
+  networks_advanced {'''
+                )
+                content = content.replace(
+                    'docker_network.traefik_network.name',
+                    'var.traefik_network'
+                )
+            
+            with open(path, 'w') as f:
+                f.write(content)
+            print(f"Updated {path}")
+
+def cleanup_outputs():
+    content = '''output "traefik_endpoint" {
+  value       = "http://traefik.example.com"
+  description = "The Traefik dashboard endpoint"
+}
+
+output "prometheus_endpoint" {
+  value       = "http://prometheus.example.com"
+  description = "The Prometheus endpoint"
+}
+
+output "grafana_endpoint" {
+  value       = "http://grafana.example.com"
+  description = "The Grafana endpoint"
+}
+
+output "cadvisor_endpoint" {
+  value       = "http://cadvisor.example.com"
+  description = "The cAdvisor endpoint"
+}'''
+    
+    with open('outputs.tf', 'w') as f:
+        f.write(content)
+    print("Updated outputs.tf")
+
+def main():
+    print("Simplifying Terraform configuration...")
+    update_networks_file()
+    update_monitoring_variables()
+    update_main_module()
+    update_monitoring_files()
+    cleanup_outputs()
+    print("\nDone! Please review the changes and run 'terraform plan'")
+
+if __name__ == "__main__":
+    main()
+
+
+===== FILE: ./fix_containers.py =====
+#!/usr/bin/env python3
+import re
+from pathlib import Path
+
+def fix_cadvisor():
+    content = '''resource "docker_container" "cadvisor" {
+  name  = "cadvisor"
+  image = "gcr.io/cadvisor/cadvisor:latest"
+
+  volumes {
+    host_path      = "/"
+    container_path = "/rootfs"
+    read_only      = true
+  }
+  volumes {
+    host_path      = "/var/run"
+    container_path = "/var/run"
+    read_only      = true
+  }
+  volumes {
+    host_path      = "/sys"
+    container_path = "/sys"
+    read_only      = true
+  }
+  volumes {
+    host_path      = "/var/lib/docker/"
+    container_path = "/var/lib/docker"
+    read_only      = true
+  }
+
+  ports {
+    internal = 8080
+    external = 8080
+  }
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+  labels {
+    label = "traefik.http.routers.cadvisor.rule"
+    value = "Host(`cadvisor.example.com`)"
+  }
+  labels {
+    label = "traefik.http.routers.cadvisor.entrypoints"
+    value = "https"
+  }
+  labels {
+    label = "traefik.http.routers.cadvisor.tls"
+    value = "true"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+  
+  networks_advanced {
+    name = var.traefik_network
+  }
+}'''
+    
+    with open('monitoring/cadvisor.tf', 'w') as f:
+        f.write(content)
+    print("Fixed cadvisor.tf")
+
+def fix_node_exporter():
+    content = '''resource "docker_container" "node_exporter" {
+  name  = "node_exporter"
+  image = "prom/node-exporter:latest"
+
+  ports {
+    internal = 9100
+    external = 9100
+  }
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+  labels {
+    label = "traefik.http.routers.node_exporter.rule"
+    value = "Host(`node-exporter.example.com`)"
+  }
+  labels {
+    label = "traefik.http.routers.node_exporter.entrypoints"
+    value = "https"
+  }
+  labels {
+    label = "traefik.http.routers.node_exporter.tls"
+    value = "true"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+  
+  networks_advanced {
+    name = var.traefik_network
+  }
+}'''
+    
+    with open('monitoring/node_exporter.tf', 'w') as f:
+        f.write(content)
+    print("Fixed node_exporter.tf")
+
+def fix_prometheus():
+    content = '''resource "docker_container" "prometheus" {
+  name  = "prometheus"
+  image = "prom/prometheus:latest"
+
+  volumes {
+    host_path      = "./prometheus.yml"
+    container_path = "/etc/prometheus/prometheus.yml"
+    read_only      = true
+  }
+
+  ports {
+    internal = 9090
+    external = 9090
+  }
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+  labels {
+    label = "traefik.http.routers.prometheus.rule"
+    value = "Host(`prometheus.example.com`)"
+  }
+  labels {
+    label = "traefik.http.routers.prometheus.entrypoints"
+    value = "https"
+  }
+  labels {
+    label = "traefik.http.routers.prometheus.tls"
+    value = "true"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+  
+  networks_advanced {
+    name = var.traefik_network
+  }
+}'''
+    
+    with open('monitoring/prometheus.tf', 'w') as f:
+        f.write(content)
+    print("Fixed prometheus.tf")
+
+def main():
+    print("Fixing container configurations...")
+    fix_cadvisor()
+    fix_node_exporter()
+    fix_prometheus()
+    print("\nDone! Please run 'terraform plan' again.")
+
+if __name__ == "__main__":
+    main()
+
+
+===== FILE: ./flask/app/app.py =====
+from flask import Flask, jsonify
+from redis import Redis
+import prometheus_client
+from prometheus_client import Counter, Histogram
+import os
+import time
+
+app = Flask(__name__)
+
+# Redis connection
+redis_client = Redis(
+    host=os.getenv('REDIS_HOST', 'redis'),
+    port=int(os.getenv('REDIS_PORT', 6379)),
+    password=os.getenv('REDIS_PASSWORD'),
+    decode_responses=True
+)
+
+# Prometheus metrics
+REQUEST_COUNT = Counter('flask_request_count', 'App Request Count', ['method', 'endpoint', 'http_status'])
+REQUEST_LATENCY = Histogram('flask_request_latency_seconds', 'Request latency')
+
+# Expose metrics endpoint
+@app.route('/metrics')
+def metrics():
+    return prometheus_client.generate_latest()
+
+@app.route('/health')
+def health():
+    return jsonify({"status": "healthy"}), 200
+
+@app.route('/')
+@REQUEST_LATENCY.time()
+def hello():
+    try:
+        visits = redis_client.incr('visits')
+        REQUEST_COUNT.labels(method='GET', endpoint='/', http_status=200).inc()
+        return jsonify({
+            "message": "Hello from Flask!",
+            "visits": visits
+        })
+    except Exception as e:
+        REQUEST_COUNT.labels(method='GET', endpoint='/', http_status=500).inc()
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+
+
+===== FILE: ./update_monitoring.py =====
+#!/usr/bin/env python3
+import os
+from pathlib import Path
+
+def check_and_update_monitoring():
+    """Check and update the monitoring module's provider configuration"""
+    monitoring_dir = Path("monitoring")
+    
+    # First, check if there's already a terraform block
+    has_terraform_block = False
+    has_provider_block = False
+    provider_file_path = None
+    
+    # Check all .tf files in monitoring directory
+    for tf_file in monitoring_dir.glob("*.tf"):
+        with open(tf_file, 'r') as f:
+            content = f.read()
+            if 'terraform {' in content:
+                has_terraform_block = True
+            if 'provider "docker"' in content:
+                has_provider_block = True
+                provider_file_path = tf_file
+    
+    # If no terraform block exists, create a new file
+    if not has_terraform_block:
+        new_content = '''terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
+  }
+}
+'''
+        with open(monitoring_dir / "versions.tf", 'w') as f:
+            f.write(new_content)
+        print("Created new versions.tf with required_providers block")
+    
+    # If there's a provider block, check and clean it
+    if provider_file_path:
+        with open(provider_file_path, 'r') as f:
+            content = f.read()
+        
+        # Remove any source = "..." from provider block
+        if 'source = "' in content:
+            lines = content.split('\n')
+            cleaned_lines = [line for line in lines if 'source = "' not in line]
+            with open(provider_file_path, 'w') as f:
+                f.write('\n'.join(cleaned_lines))
+            print(f"Cleaned provider configuration in {provider_file_path}")
+
+def main():
+    print("Checking monitoring module...")
+    check_and_update_monitoring()
+    print("\nDone! Please run 'terraform init' again.")
+
+if __name__ == "__main__":
+    main()
+
+
+===== FILE: ./update_terraform_docker.py =====
+#!/usr/bin/env python3
+import os
+import re
+from pathlib import Path
+
+def update_terraform_files(directory):
+    """
+    Recursively find and update Terraform files to use kreuzwerker/docker provider
+    """
+    # Pattern to match provider "docker" blocks
+    provider_pattern = re.compile(r'provider\s+"docker"\s*{([^}]*)}', re.MULTILINE | re.DOTALL)
+    
+    # Pattern to match required_providers blocks
+    required_pattern = re.compile(r'(required_providers\s*{[^}]*?)(docker\s*=\s*{[^}]*?})', re.MULTILINE | re.DOTALL)
+    
+    # Counter for modified files
+    modified_files = 0
+    
+    # Walk through all directories
+    for tf_file in Path(directory).rglob("*.tf"):
+        file_modified = False
+        with open(tf_file, 'r') as f:
+            content = f.read()
+        
+        # Update provider blocks
+        new_content = provider_pattern.sub(
+            'provider "docker" {\n  source = "kreuzwerker/docker"\n\g<1>}',
+            content
+        )
+        
+        # Update required_providers blocks
+        def required_replacement(match):
+            block_start = match.group(1)
+            if "kreuzwerker/docker" not in match.group(2):
+                return f'{block_start}docker = {{\n      source = "kreuzwerker/docker"\n    }}'
+            return match.group(0)
+        
+        new_content = required_pattern.sub(required_replacement, new_content)
+        
+        # If content changed, write back to file
+        if new_content != content:
+            with open(tf_file, 'w') as f:
+                f.write(new_content)
+            modified_files += 1
+            print(f"Updated: {tf_file}")
+    
+    return modified_files
+
+def main():
+    # Get current directory
+    current_dir = os.getcwd()
+    
+    print(f"Starting scan in: {current_dir}")
+    print("Looking for Terraform files to update...")
+    
+    # Create backup
+    backup_command = f"tar -czf terraform_backup_$(date +%Y%m%d_%H%M%S).tar.gz $(find . -name '*.tf')"
+    print("Creating backup...")
+    os.system(backup_command)
+    
+    # Update files
+    modified = update_terraform_files(current_dir)
+    
+    print(f"\nComplete! Modified {modified} files.")
+    if modified > 0:
+        print("Please review the changes and run 'terraform init' again.")
+    else:
+        print("No files needed updating.")
+
+if __name__ == "__main__":
+    main()
+
+
+Collecting known config files (like .yaml, .yml, .conf)...
+
+
+===== FILE: ./logging/config/loki-config.yaml =====
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2020-01-01
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v11
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  retention_period: 168h
+
+compactor:
+  working_directory: /loki/compactor
+  shared_store: filesystem
+  compaction_interval: 10m
+
+
+===== FILE: ./logging/config/promtail-config.yaml =====
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: docker
+          __path__: /var/lib/docker/containers/*/*-json.log
+    pipeline_stages:
+      - json:
+          expressions:
+            output: log
+            stream: stream
+            timestamp: time
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+      - labels:
+          stream:
+      - output:
+          source: output
+
+
+===== FILE: ./monitoring/config/prometheus.yml =====
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['node_exporter:9100']
+        
+
+# Security metrics
+  - job_name: 'security'
+    static_configs:
+      - targets: ['security-metrics:9100']
+    metrics_path: '/metrics'        
+
+
+===== FILE: ./auth/postgres-data/pg_hba.conf =====
+# PostgreSQL Client Authentication Configuration File
+# ===================================================
+#
+# Refer to the "Client Authentication" section in the PostgreSQL
+# documentation for a complete description of this file.  A short
+# synopsis follows.
+#
+# This file controls: which hosts are allowed to connect, how clients
+# are authenticated, which PostgreSQL user names they can use, which
+# databases they can access.  Records take one of these forms:
+#
+# local         DATABASE  USER  METHOD  [OPTIONS]
+# host          DATABASE  USER  ADDRESS  METHOD  [OPTIONS]
+# hostssl       DATABASE  USER  ADDRESS  METHOD  [OPTIONS]
+# hostnossl     DATABASE  USER  ADDRESS  METHOD  [OPTIONS]
+# hostgssenc    DATABASE  USER  ADDRESS  METHOD  [OPTIONS]
+# hostnogssenc  DATABASE  USER  ADDRESS  METHOD  [OPTIONS]
+#
+# (The uppercase items must be replaced by actual values.)
+#
+# The first field is the connection type: "local" is a Unix-domain
+# socket, "host" is either a plain or SSL-encrypted TCP/IP socket,
+# "hostssl" is an SSL-encrypted TCP/IP socket, and "hostnossl" is a
+# non-SSL TCP/IP socket.  Similarly, "hostgssenc" uses a
+# GSSAPI-encrypted TCP/IP socket, while "hostnogssenc" uses a
+# non-GSSAPI socket.
+#
+# DATABASE can be "all", "sameuser", "samerole", "replication", a
+# database name, or a comma-separated list thereof. The "all"
+# keyword does not match "replication". Access to replication
+# must be enabled in a separate record (see example below).
+#
+# USER can be "all", a user name, a group name prefixed with "+", or a
+# comma-separated list thereof.  In both the DATABASE and USER fields
+# you can also write a file name prefixed with "@" to include names
+# from a separate file.
+#
+# ADDRESS specifies the set of hosts the record matches.  It can be a
+# host name, or it is made up of an IP address and a CIDR mask that is
+# an integer (between 0 and 32 (IPv4) or 128 (IPv6) inclusive) that
+# specifies the number of significant bits in the mask.  A host name
+# that starts with a dot (.) matches a suffix of the actual host name.
+# Alternatively, you can write an IP address and netmask in separate
+# columns to specify the set of hosts.  Instead of a CIDR-address, you
+# can write "samehost" to match any of the server's own IP addresses,
+# or "samenet" to match any address in any subnet that the server is
+# directly connected to.
+#
+# METHOD can be "trust", "reject", "md5", "password", "scram-sha-256",
+# "gss", "sspi", "ident", "peer", "pam", "ldap", "radius" or "cert".
+# Note that "password" sends passwords in clear text; "md5" or
+# "scram-sha-256" are preferred since they send encrypted passwords.
+#
+# OPTIONS are a set of options for the authentication in the format
+# NAME=VALUE.  The available options depend on the different
+# authentication methods -- refer to the "Client Authentication"
+# section in the documentation for a list of which options are
+# available for which authentication methods.
+#
+# Database and user names containing spaces, commas, quotes and other
+# special characters must be quoted.  Quoting one of the keywords
+# "all", "sameuser", "samerole" or "replication" makes the name lose
+# its special character, and just match a database or username with
+# that name.
+#
+# This file is read on server startup and when the server receives a
+# SIGHUP signal.  If you edit the file on a running system, you have to
+# SIGHUP the server for the changes to take effect, run "pg_ctl reload",
+# or execute "SELECT pg_reload_conf()".
+#
+# Put your actual configuration here
+# ----------------------------------
+#
+# If you want to allow non-local connections, you need to add more
+# "host" records.  In that case you will also need to make PostgreSQL
+# listen on a non-local interface via the listen_addresses
+# configuration parameter, or via the -i or -h command line switches.
+
+# CAUTION: Configuring the system for local "trust" authentication
+# allows any local user to connect as any PostgreSQL user, including
+# the database superuser.  If you do not trust all your local users,
+# use another authentication method.
+
+
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+
+# "local" is for Unix domain socket connections only
+local   all             all                                     trust
+# IPv4 local connections:
+host    all             all             127.0.0.1/32            trust
+# IPv6 local connections:
+host    all             all             ::1/128                 trust
+# Allow replication connections from localhost, by a user with the
+# replication privilege.
+local   replication     all                                     trust
+host    replication     all             127.0.0.1/32            trust
+host    replication     all             ::1/128                 trust
+
+host all all all md5
+
+
+===== FILE: ./auth/postgres-data/pg_ident.conf =====
+# PostgreSQL User Name Maps
+# =========================
+#
+# Refer to the PostgreSQL documentation, chapter "Client
+# Authentication" for a complete description.  A short synopsis
+# follows.
+#
+# This file controls PostgreSQL user name mapping.  It maps external
+# user names to their corresponding PostgreSQL user names.  Records
+# are of the form:
+#
+# MAPNAME  SYSTEM-USERNAME  PG-USERNAME
+#
+# (The uppercase quantities must be replaced by actual values.)
+#
+# MAPNAME is the (otherwise freely chosen) map name that was used in
+# pg_hba.conf.  SYSTEM-USERNAME is the detected user name of the
+# client.  PG-USERNAME is the requested PostgreSQL user name.  The
+# existence of a record specifies that SYSTEM-USERNAME may connect as
+# PG-USERNAME.
+#
+# If SYSTEM-USERNAME starts with a slash (/), it will be treated as a
+# regular expression.  Optionally this can contain a capture (a
+# parenthesized subexpression).  The substring matching the capture
+# will be substituted for \1 (backslash-one) if present in
+# PG-USERNAME.
+#
+# Multiple maps may be specified in this file and used by pg_hba.conf.
+#
+# No map names are defined in the default configuration.  If all
+# system user names and PostgreSQL user names are the same, you don't
+# need anything in this file.
+#
+# This file is read on server startup and when the postmaster receives
+# a SIGHUP signal.  If you edit the file on a running system, you have
+# to SIGHUP the postmaster for the changes to take effect.  You can
+# use "pg_ctl reload" to do that.
+
+# Put your actual configuration here
+# ----------------------------------
+
+# MAPNAME       SYSTEM-USERNAME         PG-USERNAME
+
+
+===== FILE: ./auth/postgres-data/postgresql.auto.conf =====
+# Do not edit this file manually!
+# It will be overwritten by the ALTER SYSTEM command.
+
+
+===== FILE: ./auth/postgres-data/postgresql.conf =====
+# -----------------------------
+# PostgreSQL configuration file
+# -----------------------------
+#
+# This file consists of lines of the form:
+#
+#   name = value
+#
+# (The "=" is optional.)  Whitespace may be used.  Comments are introduced with
+# "#" anywhere on a line.  The complete list of parameter names and allowed
+# values can be found in the PostgreSQL documentation.
+#
+# The commented-out settings shown in this file represent the default values.
+# Re-commenting a setting is NOT sufficient to revert it to the default value;
+# you need to reload the server.
+#
+# This file is read on server startup and when the server receives a SIGHUP
+# signal.  If you edit the file on a running system, you have to SIGHUP the
+# server for the changes to take effect, run "pg_ctl reload", or execute
+# "SELECT pg_reload_conf()".  Some parameters, which are marked below,
+# require a server shutdown and restart to take effect.
+#
+# Any parameter can also be given as a command-line option to the server, e.g.,
+# "postgres -c log_connections=on".  Some parameters can be changed at run time
+# with the "SET" SQL command.
+#
+# Memory units:  B  = bytes            Time units:  us  = microseconds
+#                kB = kilobytes                     ms  = milliseconds
+#                MB = megabytes                     s   = seconds
+#                GB = gigabytes                     min = minutes
+#                TB = terabytes                     h   = hours
+#                                                   d   = days
+
+
+#------------------------------------------------------------------------------
+# FILE LOCATIONS
+#------------------------------------------------------------------------------
+
+# The default values of these variables are driven from the -D command-line
+# option or PGDATA environment variable, represented here as ConfigDir.
+
+#data_directory = 'ConfigDir'		# use data in another directory
+					# (change requires restart)
+#hba_file = 'ConfigDir/pg_hba.conf'	# host-based authentication file
+					# (change requires restart)
+#ident_file = 'ConfigDir/pg_ident.conf'	# ident configuration file
+					# (change requires restart)
+
+# If external_pid_file is not explicitly set, no extra PID file is written.
+#external_pid_file = ''			# write an extra PID file
+					# (change requires restart)
+
+
+#------------------------------------------------------------------------------
+# CONNECTIONS AND AUTHENTICATION
+#------------------------------------------------------------------------------
+
+# - Connection Settings -
+
+listen_addresses = '*'
+					# comma-separated list of addresses;
+					# defaults to 'localhost'; use '*' for all
+					# (change requires restart)
+#port = 5432				# (change requires restart)
+max_connections = 100			# (change requires restart)
+#superuser_reserved_connections = 3	# (change requires restart)
+#unix_socket_directories = '/var/run/postgresql'	# comma-separated list of directories
+					# (change requires restart)
+#unix_socket_group = ''			# (change requires restart)
+#unix_socket_permissions = 0777		# begin with 0 to use octal notation
+					# (change requires restart)
+#bonjour = off				# advertise server via Bonjour
+					# (change requires restart)
+#bonjour_name = ''			# defaults to the computer name
+					# (change requires restart)
+
+# - TCP settings -
+# see "man tcp" for details
+
+#tcp_keepalives_idle = 0		# TCP_KEEPIDLE, in seconds;
+					# 0 selects the system default
+#tcp_keepalives_interval = 0		# TCP_KEEPINTVL, in seconds;
+					# 0 selects the system default
+#tcp_keepalives_count = 0		# TCP_KEEPCNT;
+					# 0 selects the system default
+#tcp_user_timeout = 0			# TCP_USER_TIMEOUT, in milliseconds;
+					# 0 selects the system default
+
+# - Authentication -
+
+#authentication_timeout = 1min		# 1s-600s
+#password_encryption = md5		# md5 or scram-sha-256
+#db_user_namespace = off
+
+# GSSAPI using Kerberos
+#krb_server_keyfile = 'FILE:${sysconfdir}/krb5.keytab'
+#krb_caseins_users = off
+
+# - SSL -
+
+#ssl = off
+#ssl_ca_file = ''
+#ssl_cert_file = 'server.crt'
+#ssl_crl_file = ''
+#ssl_key_file = 'server.key'
+#ssl_ciphers = 'HIGH:MEDIUM:+3DES:!aNULL' # allowed SSL ciphers
+#ssl_prefer_server_ciphers = on
+#ssl_ecdh_curve = 'prime256v1'
+#ssl_min_protocol_version = 'TLSv1.2'
+#ssl_max_protocol_version = ''
+#ssl_dh_params_file = ''
+#ssl_passphrase_command = ''
+#ssl_passphrase_command_supports_reload = off
+
+
+#------------------------------------------------------------------------------
+# RESOURCE USAGE (except WAL)
+#------------------------------------------------------------------------------
+
+# - Memory -
+
+shared_buffers = 128MB			# min 128kB
+					# (change requires restart)
+#huge_pages = try			# on, off, or try
+					# (change requires restart)
+#temp_buffers = 8MB			# min 800kB
+#max_prepared_transactions = 0		# zero disables the feature
+					# (change requires restart)
+# Caution: it is not advisable to set max_prepared_transactions nonzero unless
+# you actively intend to use prepared transactions.
+#work_mem = 4MB				# min 64kB
+#hash_mem_multiplier = 1.0		# 1-1000.0 multiplier on hash table work_mem
+#maintenance_work_mem = 64MB		# min 1MB
+#autovacuum_work_mem = -1		# min 1MB, or -1 to use maintenance_work_mem
+#logical_decoding_work_mem = 64MB	# min 64kB
+#max_stack_depth = 2MB			# min 100kB
+#shared_memory_type = mmap		# the default is the first option
+					# supported by the operating system:
+					#   mmap
+					#   sysv
+					#   windows
+					# (change requires restart)
+dynamic_shared_memory_type = posix	# the default is the first option
+					# supported by the operating system:
+					#   posix
+					#   sysv
+					#   windows
+					#   mmap
+					# (change requires restart)
+
+# - Disk -
+
+#temp_file_limit = -1			# limits per-process temp file space
+					# in kilobytes, or -1 for no limit
+
+# - Kernel Resources -
+
+#max_files_per_process = 1000		# min 64
+					# (change requires restart)
+
+# - Cost-Based Vacuum Delay -
+
+#vacuum_cost_delay = 0			# 0-100 milliseconds (0 disables)
+#vacuum_cost_page_hit = 1		# 0-10000 credits
+#vacuum_cost_page_miss = 10		# 0-10000 credits
+#vacuum_cost_page_dirty = 20		# 0-10000 credits
+#vacuum_cost_limit = 200		# 1-10000 credits
+
+# - Background Writer -
+
+#bgwriter_delay = 200ms			# 10-10000ms between rounds
+#bgwriter_lru_maxpages = 100		# max buffers written/round, 0 disables
+#bgwriter_lru_multiplier = 2.0		# 0-10.0 multiplier on buffers scanned/round
+#bgwriter_flush_after = 512kB		# measured in pages, 0 disables
+
+# - Asynchronous Behavior -
+
+#effective_io_concurrency = 1		# 1-1000; 0 disables prefetching
+#maintenance_io_concurrency = 10	# 1-1000; 0 disables prefetching
+#max_worker_processes = 8		# (change requires restart)
+#max_parallel_maintenance_workers = 2	# limited by max_parallel_workers
+#max_parallel_workers_per_gather = 2	# limited by max_parallel_workers
+#parallel_leader_participation = on
+#max_parallel_workers = 8		# number of max_worker_processes that
+					# can be used in parallel operations
+#old_snapshot_threshold = -1		# 1min-60d; -1 disables; 0 is immediate
+					# (change requires restart)
+#backend_flush_after = 0		# measured in pages, 0 disables
+
+
+#------------------------------------------------------------------------------
+# WRITE-AHEAD LOG
+#------------------------------------------------------------------------------
+
+# - Settings -
+
+#wal_level = replica			# minimal, replica, or logical
+					# (change requires restart)
+#fsync = on				# flush data to disk for crash safety
+					# (turning this off can cause
+					# unrecoverable data corruption)
+#synchronous_commit = on		# synchronization level;
+					# off, local, remote_write, remote_apply, or on
+#wal_sync_method = fsync		# the default is the first option
+					# supported by the operating system:
+					#   open_datasync
+					#   fdatasync (default on Linux and FreeBSD)
+					#   fsync
+					#   fsync_writethrough
+					#   open_sync
+#full_page_writes = on			# recover from partial page writes
+#wal_compression = off			# enable compression of full-page writes
+#wal_log_hints = off			# also do full page writes of non-critical updates
+					# (change requires restart)
+#wal_init_zero = on			# zero-fill new WAL files
+#wal_recycle = on			# recycle WAL files
+#wal_buffers = -1			# min 32kB, -1 sets based on shared_buffers
+					# (change requires restart)
+#wal_writer_delay = 200ms		# 1-10000 milliseconds
+#wal_writer_flush_after = 1MB		# measured in pages, 0 disables
+#wal_skip_threshold = 2MB
+
+#commit_delay = 0			# range 0-100000, in microseconds
+#commit_siblings = 5			# range 1-1000
+
+# - Checkpoints -
+
+#checkpoint_timeout = 5min		# range 30s-1d
+max_wal_size = 1GB
+min_wal_size = 80MB
+#checkpoint_completion_target = 0.5	# checkpoint target duration, 0.0 - 1.0
+#checkpoint_flush_after = 256kB		# measured in pages, 0 disables
+#checkpoint_warning = 30s		# 0 disables
+
+# - Archiving -
+
+#archive_mode = off		# enables archiving; off, on, or always
+				# (change requires restart)
+#archive_command = ''		# command to use to archive a logfile segment
+				# placeholders: %p = path of file to archive
+				#               %f = file name only
+				# e.g. 'test ! -f /mnt/server/archivedir/%f && cp %p /mnt/server/archivedir/%f'
+#archive_timeout = 0		# force a logfile segment switch after this
+				# number of seconds; 0 disables
+
+# - Archive Recovery -
+
+# These are only used in recovery mode.
+
+#restore_command = ''		# command to use to restore an archived logfile segment
+				# placeholders: %p = path of file to restore
+				#               %f = file name only
+				# e.g. 'cp /mnt/server/archivedir/%f %p'
+				# (change requires restart)
+#archive_cleanup_command = ''	# command to execute at every restartpoint
+#recovery_end_command = ''	# command to execute at completion of recovery
+
+# - Recovery Target -
+
+# Set these only when performing a targeted recovery.
+
+#recovery_target = ''		# 'immediate' to end recovery as soon as a
+                                # consistent state is reached
+				# (change requires restart)
+#recovery_target_name = ''	# the named restore point to which recovery will proceed
+				# (change requires restart)
+#recovery_target_time = ''	# the time stamp up to which recovery will proceed
+				# (change requires restart)
+#recovery_target_xid = ''	# the transaction ID up to which recovery will proceed
+				# (change requires restart)
+#recovery_target_lsn = ''	# the WAL LSN up to which recovery will proceed
+				# (change requires restart)
+#recovery_target_inclusive = on # Specifies whether to stop:
+				# just after the specified recovery target (on)
+				# just before the recovery target (off)
+				# (change requires restart)
+#recovery_target_timeline = 'latest'	# 'current', 'latest', or timeline ID
+				# (change requires restart)
+#recovery_target_action = 'pause'	# 'pause', 'promote', 'shutdown'
+				# (change requires restart)
+
+
+#------------------------------------------------------------------------------
+# REPLICATION
+#------------------------------------------------------------------------------
+
+# - Sending Servers -
+
+# Set these on the master and on any standby that will send replication data.
+
+#max_wal_senders = 10		# max number of walsender processes
+				# (change requires restart)
+#wal_keep_size = 0		# in megabytes; 0 disables
+#max_slot_wal_keep_size = -1	# in megabytes; -1 disables
+#wal_sender_timeout = 60s	# in milliseconds; 0 disables
+
+#max_replication_slots = 10	# max number of replication slots
+				# (change requires restart)
+#track_commit_timestamp = off	# collect timestamp of transaction commit
+				# (change requires restart)
+
+# - Master Server -
+
+# These settings are ignored on a standby server.
+
+#synchronous_standby_names = ''	# standby servers that provide sync rep
+				# method to choose sync standbys, number of sync standbys,
+				# and comma-separated list of application_name
+				# from standby(s); '*' = all
+#vacuum_defer_cleanup_age = 0	# number of xacts by which cleanup is delayed
+
+# - Standby Servers -
+
+# These settings are ignored on a master server.
+
+#primary_conninfo = ''			# connection string to sending server
+#primary_slot_name = ''			# replication slot on sending server
+#promote_trigger_file = ''		# file name whose presence ends recovery
+#hot_standby = on			# "off" disallows queries during recovery
+					# (change requires restart)
+#max_standby_archive_delay = 30s	# max delay before canceling queries
+					# when reading WAL from archive;
+					# -1 allows indefinite delay
+#max_standby_streaming_delay = 30s	# max delay before canceling queries
+					# when reading streaming WAL;
+					# -1 allows indefinite delay
+#wal_receiver_create_temp_slot = off	# create temp slot if primary_slot_name
+					# is not set
+#wal_receiver_status_interval = 10s	# send replies at least this often
+					# 0 disables
+#hot_standby_feedback = off		# send info from standby to prevent
+					# query conflicts
+#wal_receiver_timeout = 60s		# time that receiver waits for
+					# communication from master
+					# in milliseconds; 0 disables
+#wal_retrieve_retry_interval = 5s	# time to wait before retrying to
+					# retrieve WAL after a failed attempt
+#recovery_min_apply_delay = 0		# minimum delay for applying changes during recovery
+
+# - Subscribers -
+
+# These settings are ignored on a publisher.
+
+#max_logical_replication_workers = 4	# taken from max_worker_processes
+					# (change requires restart)
+#max_sync_workers_per_subscription = 2	# taken from max_logical_replication_workers
+
+
+#------------------------------------------------------------------------------
+# QUERY TUNING
+#------------------------------------------------------------------------------
+
+# - Planner Method Configuration -
+
+#enable_bitmapscan = on
+#enable_hashagg = on
+#enable_hashjoin = on
+#enable_indexscan = on
+#enable_indexonlyscan = on
+#enable_material = on
+#enable_mergejoin = on
+#enable_nestloop = on
+#enable_parallel_append = on
+#enable_seqscan = on
+#enable_sort = on
+#enable_incremental_sort = on
+#enable_tidscan = on
+#enable_partitionwise_join = off
+#enable_partitionwise_aggregate = off
+#enable_parallel_hash = on
+#enable_partition_pruning = on
+
+# - Planner Cost Constants -
+
+#seq_page_cost = 1.0			# measured on an arbitrary scale
+#random_page_cost = 4.0			# same scale as above
+#cpu_tuple_cost = 0.01			# same scale as above
+#cpu_index_tuple_cost = 0.005		# same scale as above
+#cpu_operator_cost = 0.0025		# same scale as above
+#parallel_tuple_cost = 0.1		# same scale as above
+#parallel_setup_cost = 1000.0	# same scale as above
+
+#jit_above_cost = 100000		# perform JIT compilation if available
+					# and query more expensive than this;
+					# -1 disables
+#jit_inline_above_cost = 500000		# inline small functions if query is
+					# more expensive than this; -1 disables
+#jit_optimize_above_cost = 500000	# use expensive JIT optimizations if
+					# query is more expensive than this;
+					# -1 disables
+
+#min_parallel_table_scan_size = 8MB
+#min_parallel_index_scan_size = 512kB
+#effective_cache_size = 4GB
+
+# - Genetic Query Optimizer -
+
+#geqo = on
+#geqo_threshold = 12
+#geqo_effort = 5			# range 1-10
+#geqo_pool_size = 0			# selects default based on effort
+#geqo_generations = 0			# selects default based on effort
+#geqo_selection_bias = 2.0		# range 1.5-2.0
+#geqo_seed = 0.0			# range 0.0-1.0
+
+# - Other Planner Options -
+
+#default_statistics_target = 100	# range 1-10000
+#constraint_exclusion = partition	# on, off, or partition
+#cursor_tuple_fraction = 0.1		# range 0.0-1.0
+#from_collapse_limit = 8
+#join_collapse_limit = 8		# 1 disables collapsing of explicit
+					# JOIN clauses
+#force_parallel_mode = off
+#jit = on				# allow JIT compilation
+#plan_cache_mode = auto			# auto, force_generic_plan or
+					# force_custom_plan
+
+
+#------------------------------------------------------------------------------
+# REPORTING AND LOGGING
+#------------------------------------------------------------------------------
+
+# - Where to Log -
+
+#log_destination = 'stderr'		# Valid values are combinations of
+					# stderr, csvlog, syslog, and eventlog,
+					# depending on platform.  csvlog
+					# requires logging_collector to be on.
+
+# This is used when logging to stderr:
+#logging_collector = off		# Enable capturing of stderr and csvlog
+					# into log files. Required to be on for
+					# csvlogs.
+					# (change requires restart)
+
+# These are only used if logging_collector is on:
+#log_directory = 'log'			# directory where log files are written,
+					# can be absolute or relative to PGDATA
+#log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'	# log file name pattern,
+					# can include strftime() escapes
+#log_file_mode = 0600			# creation mode for log files,
+					# begin with 0 to use octal notation
+#log_truncate_on_rotation = off		# If on, an existing log file with the
+					# same name as the new log file will be
+					# truncated rather than appended to.
+					# But such truncation only occurs on
+					# time-driven rotation, not on restarts
+					# or size-driven rotation.  Default is
+					# off, meaning append to existing files
+					# in all cases.
+#log_rotation_age = 1d			# Automatic rotation of logfiles will
+					# happen after that time.  0 disables.
+#log_rotation_size = 10MB		# Automatic rotation of logfiles will
+					# happen after that much log output.
+					# 0 disables.
+
+# These are relevant when logging to syslog:
+#syslog_facility = 'LOCAL0'
+#syslog_ident = 'postgres'
+#syslog_sequence_numbers = on
+#syslog_split_messages = on
+
+# This is only relevant when logging to eventlog (win32):
+# (change requires restart)
+#event_source = 'PostgreSQL'
+
+# - When to Log -
+
+#log_min_messages = warning		# values in order of decreasing detail:
+					#   debug5
+					#   debug4
+					#   debug3
+					#   debug2
+					#   debug1
+					#   info
+					#   notice
+					#   warning
+					#   error
+					#   log
+					#   fatal
+					#   panic
+
+#log_min_error_statement = error	# values in order of decreasing detail:
+					#   debug5
+					#   debug4
+					#   debug3
+					#   debug2
+					#   debug1
+					#   info
+					#   notice
+					#   warning
+					#   error
+					#   log
+					#   fatal
+					#   panic (effectively off)
+
+#log_min_duration_statement = -1	# -1 is disabled, 0 logs all statements
+					# and their durations, > 0 logs only
+					# statements running at least this number
+					# of milliseconds
+
+#log_min_duration_sample = -1		# -1 is disabled, 0 logs a sample of statements
+					# and their durations, > 0 logs only a sample of
+					# statements running at least this number
+					# of milliseconds;
+					# sample fraction is determined by log_statement_sample_rate
+
+#log_statement_sample_rate = 1.0	# fraction of logged statements exceeding
+					# log_min_duration_sample to be logged;
+					# 1.0 logs all such statements, 0.0 never logs
+
+
+#log_transaction_sample_rate = 0.0	# fraction of transactions whose statements
+					# are logged regardless of their duration; 1.0 logs all
+					# statements from all transactions, 0.0 never logs
+
+# - What to Log -
+
+#debug_print_parse = off
+#debug_print_rewritten = off
+#debug_print_plan = off
+#debug_pretty_print = on
+#log_checkpoints = off
+#log_connections = off
+#log_disconnections = off
+#log_duration = off
+#log_error_verbosity = default		# terse, default, or verbose messages
+#log_hostname = off
+#log_line_prefix = '%m [%p] '		# special values:
+					#   %a = application name
+					#   %u = user name
+					#   %d = database name
+					#   %r = remote host and port
+					#   %h = remote host
+					#   %b = backend type
+					#   %p = process ID
+					#   %t = timestamp without milliseconds
+					#   %m = timestamp with milliseconds
+					#   %n = timestamp with milliseconds (as a Unix epoch)
+					#   %i = command tag
+					#   %e = SQL state
+					#   %c = session ID
+					#   %l = session line number
+					#   %s = session start timestamp
+					#   %v = virtual transaction ID
+					#   %x = transaction ID (0 if none)
+					#   %q = stop here in non-session
+					#        processes
+					#   %% = '%'
+					# e.g. '<%u%%%d> '
+#log_lock_waits = off			# log lock waits >= deadlock_timeout
+#log_parameter_max_length = -1		# when logging statements, limit logged
+					# bind-parameter values to N bytes;
+					# -1 means print in full, 0 disables
+#log_parameter_max_length_on_error = 0	# when logging an error, limit logged
+					# bind-parameter values to N bytes;
+					# -1 means print in full, 0 disables
+#log_statement = 'none'			# none, ddl, mod, all
+#log_replication_commands = off
+#log_temp_files = -1			# log temporary files equal or larger
+					# than the specified size in kilobytes;
+					# -1 disables, 0 logs all temp files
+log_timezone = 'Etc/UTC'
+
+#------------------------------------------------------------------------------
+# PROCESS TITLE
+#------------------------------------------------------------------------------
+
+#cluster_name = ''			# added to process titles if nonempty
+					# (change requires restart)
+#update_process_title = on
+
+
+#------------------------------------------------------------------------------
+# STATISTICS
+#------------------------------------------------------------------------------
+
+# - Query and Index Statistics Collector -
+
+#track_activities = on
+#track_counts = on
+#track_io_timing = off
+#track_functions = none			# none, pl, all
+#track_activity_query_size = 1024	# (change requires restart)
+#stats_temp_directory = 'pg_stat_tmp'
+
+
+# - Monitoring -
+
+#log_parser_stats = off
+#log_planner_stats = off
+#log_executor_stats = off
+#log_statement_stats = off
+
+
+#------------------------------------------------------------------------------
+# AUTOVACUUM
+#------------------------------------------------------------------------------
+
+#autovacuum = on			# Enable autovacuum subprocess?  'on'
+					# requires track_counts to also be on.
+#log_autovacuum_min_duration = -1	# -1 disables, 0 logs all actions and
+					# their durations, > 0 logs only
+					# actions running at least this number
+					# of milliseconds.
+#autovacuum_max_workers = 3		# max number of autovacuum subprocesses
+					# (change requires restart)
+#autovacuum_naptime = 1min		# time between autovacuum runs
+#autovacuum_vacuum_threshold = 50	# min number of row updates before
+					# vacuum
+#autovacuum_vacuum_insert_threshold = 1000	# min number of row inserts
+					# before vacuum; -1 disables insert
+					# vacuums
+#autovacuum_analyze_threshold = 50	# min number of row updates before
+					# analyze
+#autovacuum_vacuum_scale_factor = 0.2	# fraction of table size before vacuum
+#autovacuum_vacuum_insert_scale_factor = 0.2	# fraction of inserts over table
+					# size before insert vacuum
+#autovacuum_analyze_scale_factor = 0.1	# fraction of table size before analyze
+#autovacuum_freeze_max_age = 200000000	# maximum XID age before forced vacuum
+					# (change requires restart)
+#autovacuum_multixact_freeze_max_age = 400000000	# maximum multixact age
+					# before forced vacuum
+					# (change requires restart)
+#autovacuum_vacuum_cost_delay = 2ms	# default vacuum cost delay for
+					# autovacuum, in milliseconds;
+					# -1 means use vacuum_cost_delay
+#autovacuum_vacuum_cost_limit = -1	# default vacuum cost limit for
+					# autovacuum, -1 means use
+					# vacuum_cost_limit
+
+
+#------------------------------------------------------------------------------
+# CLIENT CONNECTION DEFAULTS
+#------------------------------------------------------------------------------
+
+# - Statement Behavior -
+
+#client_min_messages = notice		# values in order of decreasing detail:
+					#   debug5
+					#   debug4
+					#   debug3
+					#   debug2
+					#   debug1
+					#   log
+					#   notice
+					#   warning
+					#   error
+#search_path = '"$user", public'	# schema names
+#row_security = on
+#default_tablespace = ''		# a tablespace name, '' uses the default
+#temp_tablespaces = ''			# a list of tablespace names, '' uses
+					# only default tablespace
+#default_table_access_method = 'heap'
+#check_function_bodies = on
+#default_transaction_isolation = 'read committed'
+#default_transaction_read_only = off
+#default_transaction_deferrable = off
+#session_replication_role = 'origin'
+#statement_timeout = 0			# in milliseconds, 0 is disabled
+#lock_timeout = 0			# in milliseconds, 0 is disabled
+#idle_in_transaction_session_timeout = 0	# in milliseconds, 0 is disabled
+#vacuum_freeze_min_age = 50000000
+#vacuum_freeze_table_age = 150000000
+#vacuum_multixact_freeze_min_age = 5000000
+#vacuum_multixact_freeze_table_age = 150000000
+#vacuum_cleanup_index_scale_factor = 0.1	# fraction of total number of tuples
+						# before index cleanup, 0 always performs
+						# index cleanup
+#bytea_output = 'hex'			# hex, escape
+#xmlbinary = 'base64'
+#xmloption = 'content'
+#gin_fuzzy_search_limit = 0
+#gin_pending_list_limit = 4MB
+
+# - Locale and Formatting -
+
+datestyle = 'iso, mdy'
+#intervalstyle = 'postgres'
+timezone = 'Etc/UTC'
+#timezone_abbreviations = 'Default'     # Select the set of available time zone
+					# abbreviations.  Currently, there are
+					#   Default
+					#   Australia (historical usage)
+					#   India
+					# You can create your own file in
+					# share/timezonesets/.
+#extra_float_digits = 1			# min -15, max 3; any value >0 actually
+					# selects precise output mode
+#client_encoding = sql_ascii		# actually, defaults to database
+					# encoding
+
+# These settings are initialized by initdb, but they can be changed.
+lc_messages = 'en_US.utf8'			# locale for system error message
+					# strings
+lc_monetary = 'en_US.utf8'			# locale for monetary formatting
+lc_numeric = 'en_US.utf8'			# locale for number formatting
+lc_time = 'en_US.utf8'				# locale for time formatting
+
+# default configuration for text search
+default_text_search_config = 'pg_catalog.english'
+
+# - Shared Library Preloading -
+
+#shared_preload_libraries = ''	# (change requires restart)
+#local_preload_libraries = ''
+#session_preload_libraries = ''
+#jit_provider = 'llvmjit'		# JIT library to use
+
+# - Other Defaults -
+
+#dynamic_library_path = '$libdir'
+#extension_destdir = ''			# prepend path when loading extensions
+					# and shared objects (added by Debian)
+
+
+#------------------------------------------------------------------------------
+# LOCK MANAGEMENT
+#------------------------------------------------------------------------------
+
+#deadlock_timeout = 1s
+#max_locks_per_transaction = 64		# min 10
+					# (change requires restart)
+#max_pred_locks_per_transaction = 64	# min 10
+					# (change requires restart)
+#max_pred_locks_per_relation = -2	# negative values mean
+					# (max_pred_locks_per_transaction
+					#  / -max_pred_locks_per_relation) - 1
+#max_pred_locks_per_page = 2            # min 0
+
+
+#------------------------------------------------------------------------------
+# VERSION AND PLATFORM COMPATIBILITY
+#------------------------------------------------------------------------------
+
+# - Previous PostgreSQL Versions -
+
+#array_nulls = on
+#backslash_quote = safe_encoding	# on, off, or safe_encoding
+#escape_string_warning = on
+#lo_compat_privileges = off
+#operator_precedence_warning = off
+#quote_all_identifiers = off
+#standard_conforming_strings = on
+#synchronize_seqscans = on
+
+# - Other Platforms and Clients -
+
+#transform_null_equals = off
+
+
+#------------------------------------------------------------------------------
+# ERROR HANDLING
+#------------------------------------------------------------------------------
+
+#exit_on_error = off			# terminate session on any error?
+#restart_after_crash = on		# reinitialize after backend crash?
+#data_sync_retry = off			# retry or panic on failure to fsync
+					# data?
+					# (change requires restart)
+
+
+#------------------------------------------------------------------------------
+# CONFIG FILE INCLUDES
+#------------------------------------------------------------------------------
+
+# These options allow settings to be loaded from files other than the
+# default postgresql.conf.  Note that these are directives, not variable
+# assignments, so they can usefully be given more than once.
+
+#include_dir = '...'			# include files ending in '.conf' from
+					# a directory, e.g., 'conf.d'
+#include_if_exists = '...'		# include file only if it exists
+#include = '...'			# include file
+
+
+#------------------------------------------------------------------------------
+# CUSTOMIZED OPTIONS
+#------------------------------------------------------------------------------
+
+# Add settings for extensions here

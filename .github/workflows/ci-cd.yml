@@ -32,12 +32,45 @@ jobs:
           set -x
           echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin 2>&1 | tee docker_login.log
 
+      # Check de status van Vault en bewaar in JSON voor latere parsing
       - name: Check Vault Status
         run: |
           set -x
           export VAULT_ADDR="${{ env.VAULT_ADDR }}"
           export VAULT_TOKEN="${{ env.VAULT_TOKEN }}"
-          vault status 2>&1 | tee vault_status.log
+          vault status -format=json 2>&1 | tee vault_status.json
+
+      # Controleer of Vault sealed is dmv JSON output
+      - name: Check if Vault is sealed
+        id: check_if_vault_is_sealed
+        run: |
+          set -x
+          sealed=$(jq -r '.sealed' vault_status.json)
+          if [ "$sealed" = "true" ]; then
+            echo "Vault is sealed."
+          else
+            echo "Vault is already unsealed."
+            # Exit 1 zodat deze stap 'failure' wordt en we in de volgende stap conditional logic kunnen toepassen
+            exit 1
+          fi
+
+      # Alleen unsealen als de vorige stap success was (dwz Vault was sealed)
+      - name: Unseal Vault
+        if: steps.check_if_vault_is_sealed.outcome == 'success'
+        run: |
+          set -x
+          export VAULT_ADDR="${{ env.VAULT_ADDR }}"
+          vault operator unseal ${{ secrets.VAULT_UNSEAL_KEY_1 }}
+          vault operator unseal ${{ secrets.VAULT_UNSEAL_KEY_2 }}
+          vault operator unseal ${{ secrets.VAULT_UNSEAL_KEY_3 }}
+
+      # Check na unseal of Vault nu unsealed is
+      - name: Check Vault Status after Unseal
+        if: steps.check_if_vault_is_sealed.outcome == 'success'
+        run: |
+          set -x
+          export VAULT_ADDR="${{ env.VAULT_ADDR }}"
+          vault status 2>&1 | tee vault_status_after_unseal.log
 
       - name: Initialize Docker Swarm
         run: |
@@ -93,5 +126,6 @@ jobs:
             ./docker_login.log
             ./docker_swarm_init.log
             ./docker_stack_deploy.log
-            ./vault_status.log
+            ./vault_status.json
+            ./vault_status_after_unseal.log
 

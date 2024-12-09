@@ -58,13 +58,10 @@ resource "docker_container" "vault" {
     external = 8600
   }
 
-  lifecycle {
-    prevent_destroy = true
-    # Als het nodig is, kun je hier ignore_changes toevoegen.
-    # ignore_changes = [
-    #   image
-    # ]
-  }
+  #lifecycle {
+  #  prevent_destroy = true
+  #  ignore_changes = [image]
+  #}
 
   labels {
     label = "traefik.enable"
