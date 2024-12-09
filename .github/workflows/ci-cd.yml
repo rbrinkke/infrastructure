@@ -27,63 +27,26 @@ jobs:
         with:
           ssh-private-key: ${{ env.SSH_KEY }}
 
+      # Laat de Docker login zien.
       - name: Debug Docker Login
         run: |
           set -x
           echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin 2>&1 | tee docker_login.log
-
-      # Check de status van Vault en sla JSON output op
+      # Check de status van Vault voor meer inzicht.
       - name: Check Vault Status
         run: |
           set -x
-          export VAULT_ADDR="${{ env.VAULT_ADDR }}"
-          export VAULT_TOKEN="${{ env.VAULT_TOKEN }}"
-          vault status -format=json 2>&1 | tee vault_status.json
-
-      # Controleer of Vault sealed is en stel een output variabele in
-      - name: Determine if Vault is sealed
-        id: check_if_vault_is_sealed
-        run: |
-          set -x
-          sealed=$(jq -r '.sealed' vault_status.json)
-          if [ "$sealed" = "true" ]; then
-            echo "Vault is sealed."
-            echo "sealed=true" >> $GITHUB_OUTPUT
-          else
-            echo "Vault is already unsealed."
-            echo "sealed=false" >> $GITHUB_OUTPUT
-          fi
-
-      # Alleen unsealen als vault sealed=true is
-      - name: Unseal Vault
-        if: steps.check_if_vault_is_sealed.outputs.sealed == 'true'
-        run: |
-          set -x
-          export VAULT_ADDR="${{ env.VAULT_ADDR }}"
-          vault operator unseal ${{ secrets.VAULT_UNSEAL_KEY_1 }}
-          vault operator unseal ${{ secrets.VAULT_UNSEAL_KEY_2 }}
-          vault operator unseal ${{ secrets.VAULT_UNSEAL_KEY_3 }}
-
-      # (Optioneel) Check nogmaals na unseal
-      - name: Check Vault Status after Unseal
-        if: steps.check_if_vault_is_sealed.outputs.sealed == 'true'
-        run: |
-          set -x
-          export VAULT_ADDR="${{ env.VAULT_ADDR }}"
-          vault status 2>&1 | tee vault_status_after_unseal.log
-
+          vault status 2>&1 | tee vault_status.log
       - name: Initialize Docker Swarm
         run: |
           set -x
           docker swarm init 2>&1 | tee docker_swarm_init.log || echo "Docker Swarm is mogelijk al geïnitialiseerd"
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.4.0
 
-      # Controleer of Terraform beschikbaar is (geen actions, direct op runner)
-      - name: Check Terraform version
-        working-directory: ./terraform
-        run: |
-          set -x
-          terraform version
-
+      # Terraform init, met TF_INPUT=false en no-color voor geen interactie en duidelijke logging.
       - name: Terraform Init
         working-directory: ./terraform
         run: |
@@ -92,27 +55,39 @@ jobs:
           export TF_LOG_PATH=terraform_init.log
           export TF_INPUT=false
           terraform init -no-color 2>&1 | tee -a terraform_init.log
-
-      - name: Terraform Plan
+      - name: Terraform Apply
         working-directory: ./terraform
         run: |
           set -x
           export TF_LOG=TRACE
-          export TF_LOG_PATH=terraform_plan.log
+          export TF_LOG_PATH=terraform_apply.log
           export TF_INPUT=false
-          terraform plan -no-color 2>&1 | tee -a terraform_plan.log
-
-      # Terraform apply laten we weg, eerst checken of plan werkt
-
+          terraform apply -auto-approve -input=false -no-color 2>&1 | tee -a terraform_apply.log
+      # Ansible Playbook run met extra verbosity en logging.
+      - name: Run Ansible Playbook with more verbosity
+        working-directory: ./ansible
+        run: |
+          set -x
+          export ANSIBLE_LOG_PATH=ansible_debug.log
+          ansible-playbook playbook.yml -i inventory.yml -vvvv 2>&1 | tee -a ansible_debug.log
+      # Docker stack deploy
+      - name: Deploy Docker Stack
+        run: |
+          set -x
+          ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
+            cd $REMOTE_PATH &&
+            docker stack deploy -c docker-compose.yml infrastructure_stack
+          " 2>&1 | tee docker_stack_deploy.log
+      # Upload logs als artifacts
       - name: Upload Logs
         uses: actions/upload-artifact@v3
         with:
           name: build-logs
           path: |
             ./terraform/terraform_init.log
-            ./terraform/terraform_plan.log
+            ./terraform/terraform_apply.log
+            ./ansible/ansible_debug.log
             ./docker_login.log
             ./docker_swarm_init.log
-            ./vault_status.json
-            ./vault_status_after_unseal.log
-
+            ./docker_stack_deploy.log
+            ./vault_status.log
