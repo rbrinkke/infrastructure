@@ -21,6 +21,7 @@
         repo: 'https://github.com/rbrinkke/infrastructure.git'
         dest: /home/rob/repos/infrastructure
         update: yes
+        force: yes
       become_user: rob
 
     - name: Initialize Terraform
@@ -34,3 +35,4 @@
       args:
         chdir: /home/rob/repos/infrastructure/terraform
       become_user: rob
+
