@@ -1740,3 +1740,4 @@ terraform/vault/vault-data/sys/counters/activity
 terraform/vault/vault-data/sys/counters/activity/_acme-regeneration
 terraform/auth/postgres-data/
 terraform/vault/vault-data/
+terraform/security/trivy-cache/db/trivy.db
