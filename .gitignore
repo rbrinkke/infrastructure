@@ -1738,3 +1738,5 @@ terraform/vault/vault-data/sys/expire/id/auth/token/create/_h01c815a2864f0ca82a1
 terraform/vault/vault-data/sys/counters
 terraform/vault/vault-data/sys/counters/activity
 terraform/vault/vault-data/sys/counters/activity/_acme-regeneration
+terraform/auth/postgres-data/
+terraform/vault/vault-data/
