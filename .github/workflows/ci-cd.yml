@@ -77,10 +77,12 @@ jobs:
           set -x
           docker swarm init 2>&1 | tee docker_swarm_init.log || echo "Docker Swarm is mogelijk al geïnitialiseerd"
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.4.0
+      # Controleer of Terraform beschikbaar is (geen actions, direct op runner)
+      - name: Check Terraform version
+        working-directory: ./terraform
+        run: |
+          set -x
+          terraform version
 
       - name: Terraform Init
         working-directory: ./terraform
@@ -91,7 +93,6 @@ jobs:
           export TF_INPUT=false
           terraform init -no-color 2>&1 | tee -a terraform_init.log
 
-      # In plaats van apply nu eerst plan
       - name: Terraform Plan
         working-directory: ./terraform
         run: |
@@ -101,23 +102,7 @@ jobs:
           export TF_INPUT=false
           terraform plan -no-color 2>&1 | tee -a terraform_plan.log
 
-      # We slaan Terraform Apply nu over, eerst kijken of plan goed draait
-
-      # Run Ansible Playbook (optioneel overslaan, eerst terraform checken)
-      # - name: Run Ansible Playbook with more verbosity
-      #   working-directory: ./ansible
-      #   run: |
-      #     set -x
-      #     export ANSIBLE_LOG_PATH=ansible_debug.log
-      #     ansible-playbook playbook.yml -i inventory.yml -vvvv 2>&1 | tee -a ansible_debug.log
-
-      # - name: Deploy Docker Stack
-      #   run: |
-      #     set -x
-      #     ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
-      #       cd $REMOTE_PATH &&
-      #       docker stack deploy -c docker-compose.yml infrastructure_stack
-      #     " 2>&1 | tee docker_stack_deploy.log
+      # Terraform apply laten we weg, eerst checken of plan werkt
 
       - name: Upload Logs
         uses: actions/upload-artifact@v3
