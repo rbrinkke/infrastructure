@@ -2,6 +2,7 @@ on:
   push:
     branches:
       - main
+
 jobs:
   deploy:
     runs-on: self-hosted
@@ -20,9 +21,11 @@ jobs:
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         run: |
           echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+
       - name: Initialize Docker Swarm
         run: |
           docker swarm init || echo "Docker Swarm is mogelijk al geïnitialiseerd"
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
@@ -34,16 +37,22 @@ jobs:
           node-version: '16'
 
       - name: Terraform Init
-        run: terraform init
         working-directory: ./terraform
+        env:
+          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+        run: terraform init
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve
         working-directory: ./terraform
+        env:
+          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+        run: terraform apply -auto-approve
 
       - name: Run Ansible Playbook
-        run: ansible-playbook playbook.yml -i inventory.yml -vvv
         working-directory: ./ansible
+        run: ansible-playbook playbook.yml -i inventory.yml -vvv
 
       - name: Deploy Docker Stack
         env:
@@ -55,3 +64,4 @@ jobs:
             cd ${{ env.REMOTE_PATH }} &&
             docker stack deploy -c docker-compose.yml infrastructure_stack
           "
+
