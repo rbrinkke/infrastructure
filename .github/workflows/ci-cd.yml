@@ -1,4 +1,3 @@
-: CI/CD Pipeline
 on:
   push:
     branches:
@@ -21,11 +20,9 @@ jobs:
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         run: |
           echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-
       - name: Initialize Docker Swarm
         run: |
           docker swarm init || echo "Docker Swarm is mogelijk al geïnitialiseerd"
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
@@ -58,7 +55,3 @@ jobs:
             cd ${{ env.REMOTE_PATH }} &&
             docker stack deploy -c docker-compose.yml infrastructure_stack
           "
-          export VAULT_ADDR="${{ secrets.VAULT_ADDR }}"
-          export VAULT_TOKEN="${{ secrets.VAULT_TOKEN }}"
-          vault status
-
