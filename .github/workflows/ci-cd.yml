@@ -48,7 +48,8 @@ jobs:
           set -x
           export TF_LOG=TRACE
           export TF_LOG_PATH=terraform_init.log
-          terraform init 2>&1 | tee -a terraform_init.log
+          export TF_INPUT=false
+          terraform init -no-color 2>&1 | tee -a terraform_init.log
 
       - name: Terraform Apply
         working-directory: ./terraform
@@ -56,13 +57,16 @@ jobs:
           set -x
           export TF_LOG=TRACE
           export TF_LOG_PATH=terraform_apply.log
-          terraform apply -auto-approve 2>&1 | tee -a terraform_apply.log
+          export TF_INPUT=false
+          terraform apply -auto-approve -input=false -no-color 2>&1 | tee -a terraform_apply.log
 
       - name: Run Ansible Playbook with more verbosity
         working-directory: ./ansible
         run: |
           set -x
           export ANSIBLE_LOG_PATH=ansible_debug.log
+          # Zorg dat Ansible geen interactie nodig heeft. Als je Vault gebruikt,
+          # zorg dan dat je Vault-token en -adres correct zijn en werken.
           ansible-playbook playbook.yml -i inventory.yml -vvvv 2>&1 | tee -a ansible_debug.log
 
       - name: Deploy Docker Stack
