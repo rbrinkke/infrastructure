@@ -91,29 +91,33 @@ jobs:
           export TF_INPUT=false
           terraform init -no-color 2>&1 | tee -a terraform_init.log
 
-      - name: Terraform Apply
+      # In plaats van apply nu eerst plan
+      - name: Terraform Plan
         working-directory: ./terraform
         run: |
           set -x
           export TF_LOG=TRACE
-          export TF_LOG_PATH=terraform_apply.log
+          export TF_LOG_PATH=terraform_plan.log
           export TF_INPUT=false
-          terraform apply -auto-approve -input=false -no-color 2>&1 | tee -a terraform_apply.log
+          terraform plan -no-color 2>&1 | tee -a terraform_plan.log
 
-      - name: Run Ansible Playbook with more verbosity
-        working-directory: ./ansible
-        run: |
-          set -x
-          export ANSIBLE_LOG_PATH=ansible_debug.log
-          ansible-playbook playbook.yml -i inventory.yml -vvvv 2>&1 | tee -a ansible_debug.log
+      # We slaan Terraform Apply nu over, eerst kijken of plan goed draait
 
-      - name: Deploy Docker Stack
-        run: |
-          set -x
-          ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
-            cd $REMOTE_PATH &&
-            docker stack deploy -c docker-compose.yml infrastructure_stack
-          " 2>&1 | tee docker_stack_deploy.log
+      # Run Ansible Playbook (optioneel overslaan, eerst terraform checken)
+      # - name: Run Ansible Playbook with more verbosity
+      #   working-directory: ./ansible
+      #   run: |
+      #     set -x
+      #     export ANSIBLE_LOG_PATH=ansible_debug.log
+      #     ansible-playbook playbook.yml -i inventory.yml -vvvv 2>&1 | tee -a ansible_debug.log
+
+      # - name: Deploy Docker Stack
+      #   run: |
+      #     set -x
+      #     ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
+      #       cd $REMOTE_PATH &&
+      #       docker stack deploy -c docker-compose.yml infrastructure_stack
+      #     " 2>&1 | tee docker_stack_deploy.log
 
       - name: Upload Logs
         uses: actions/upload-artifact@v3
@@ -121,11 +125,9 @@ jobs:
           name: build-logs
           path: |
             ./terraform/terraform_init.log
-            ./terraform/terraform_apply.log
-            ./ansible/ansible_debug.log
+            ./terraform/terraform_plan.log
             ./docker_login.log
             ./docker_swarm_init.log
-            ./docker_stack_deploy.log
             ./vault_status.json
             ./vault_status_after_unseal.log
 
