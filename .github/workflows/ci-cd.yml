@@ -42,7 +42,6 @@ jobs:
         with:
           terraform_version: 1.4.0
 
-      # Hier stellen we Terraform in op een nog hoger logniveau (TRACE) en loggen naar een bestand
       - name: Terraform Init
         working-directory: ./terraform
         run: |
@@ -59,7 +58,6 @@ jobs:
           export TF_LOG_PATH=terraform_apply.log
           terraform apply -auto-approve 2>&1 | tee -a terraform_apply.log
 
-      # Ansible met maximale verbosity en log naar bestand
       - name: Run Ansible Playbook with more verbosity
         working-directory: ./ansible
         run: |
@@ -75,9 +73,8 @@ jobs:
             docker stack deploy -c docker-compose.yml infrastructure_stack
           " 2>&1 | tee docker_stack_deploy.log
 
-      # Eventueel: logs uploaden als artifact, zodat je ze later kunt bekijken
       - name: Upload Logs
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: build-logs
           path: |
