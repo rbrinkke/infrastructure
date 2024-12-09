@@ -32,7 +32,7 @@ jobs:
           set -x
           echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin 2>&1 | tee docker_login.log
 
-      # Check de status van Vault en bewaar in JSON voor latere parsing
+      # Check de status van Vault en sla JSON output op
       - name: Check Vault Status
         run: |
           set -x
@@ -40,23 +40,23 @@ jobs:
           export VAULT_TOKEN="${{ env.VAULT_TOKEN }}"
           vault status -format=json 2>&1 | tee vault_status.json
 
-      # Controleer of Vault sealed is dmv JSON output
-      - name: Check if Vault is sealed
+      # Controleer of Vault sealed is en stel een output variabele in
+      - name: Determine if Vault is sealed
         id: check_if_vault_is_sealed
         run: |
           set -x
           sealed=$(jq -r '.sealed' vault_status.json)
           if [ "$sealed" = "true" ]; then
             echo "Vault is sealed."
+            echo "sealed=true" >> $GITHUB_OUTPUT
           else
             echo "Vault is already unsealed."
-            # Exit 1 zodat deze stap 'failure' wordt en we in de volgende stap conditional logic kunnen toepassen
-            exit 1
+            echo "sealed=false" >> $GITHUB_OUTPUT
           fi
 
-      # Alleen unsealen als de vorige stap success was (dwz Vault was sealed)
+      # Alleen unsealen als vault sealed=true is
       - name: Unseal Vault
-        if: steps.check_if_vault_is_sealed.outcome == 'success'
+        if: steps.check_if_vault_is_sealed.outputs.sealed == 'true'
         run: |
           set -x
           export VAULT_ADDR="${{ env.VAULT_ADDR }}"
@@ -64,9 +64,9 @@ jobs:
           vault operator unseal ${{ secrets.VAULT_UNSEAL_KEY_2 }}
           vault operator unseal ${{ secrets.VAULT_UNSEAL_KEY_3 }}
 
-      # Check na unseal of Vault nu unsealed is
+      # (Optioneel) Check nogmaals na unseal
       - name: Check Vault Status after Unseal
-        if: steps.check_if_vault_is_sealed.outcome == 'success'
+        if: steps.check_if_vault_is_sealed.outputs.sealed == 'true'
         run: |
           set -x
           export VAULT_ADDR="${{ env.VAULT_ADDR }}"
