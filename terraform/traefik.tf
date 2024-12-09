@@ -8,7 +8,7 @@ resource "docker_container" "traefik" {
     "TRAEFIK_API_DASHBOARD=true",
     "TRAEFIK_ENTRYPOINTS_HTTP_ADDRESS=:80",
     "TRAEFIK_ENTRYPOINTS_HTTPS_ADDRESS=:443",
-    "TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_EMAIL=${data.vault_kv_secret_v2.terraform_secrets.data["acme_email"]}",
+    "TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_EMAIL=${data.vault_kv_secret_v2.terraform.data["acme_email"]}",
     "TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_STORAGE=/letsencrypt/acme.json",
     "TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_HTTPCHALLENGE=true",
     "TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_HTTPCHALLENGE_ENTRYPOINT=http",
