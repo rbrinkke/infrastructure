@@ -30,38 +30,42 @@ jobs:
       - name: Debug Docker Login
         run: |
           set -x
-          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin 2>&1 | tee docker_login.log
 
       - name: Initialize Docker Swarm
         run: |
           set -x
-          docker swarm init || echo "Docker Swarm is mogelijk al geïnitialiseerd"
+          docker swarm init 2>&1 | tee docker_swarm_init.log || echo "Docker Swarm is mogelijk al geïnitialiseerd"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.4.0
 
-      # Stel Terraform in op DEBUG modus voor meer output
+      # Hier stellen we Terraform in op een nog hoger logniveau (TRACE) en loggen naar een bestand
       - name: Terraform Init
         working-directory: ./terraform
         run: |
           set -x
-          export TF_LOG=DEBUG
-          terraform init
+          export TF_LOG=TRACE
+          export TF_LOG_PATH=terraform_init.log
+          terraform init 2>&1 | tee -a terraform_init.log
 
       - name: Terraform Apply
         working-directory: ./terraform
         run: |
           set -x
-          export TF_LOG=DEBUG
-          terraform apply -auto-approve
+          export TF_LOG=TRACE
+          export TF_LOG_PATH=terraform_apply.log
+          terraform apply -auto-approve 2>&1 | tee -a terraform_apply.log
 
+      # Ansible met maximale verbosity en log naar bestand
       - name: Run Ansible Playbook with more verbosity
         working-directory: ./ansible
         run: |
           set -x
-          ansible-playbook playbook.yml -i inventory.yml -vvvv
+          export ANSIBLE_LOG_PATH=ansible_debug.log
+          ansible-playbook playbook.yml -i inventory.yml -vvvv 2>&1 | tee -a ansible_debug.log
 
       - name: Deploy Docker Stack
         run: |
@@ -69,5 +73,18 @@ jobs:
           ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
             cd $REMOTE_PATH &&
             docker stack deploy -c docker-compose.yml infrastructure_stack
-          "
+          " 2>&1 | tee docker_stack_deploy.log
+
+      # Eventueel: logs uploaden als artifact, zodat je ze later kunt bekijken
+      - name: Upload Logs
+        uses: actions/upload-artifact@v2
+        with:
+          name: build-logs
+          path: |
+            ./terraform/terraform_init.log
+            ./terraform/terraform_apply.log
+            ./ansible/ansible_debug.log
+            ./docker_login.log
+            ./docker_swarm_init.log
+            ./docker_stack_deploy.log
 
