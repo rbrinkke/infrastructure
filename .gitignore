@@ -1756,3 +1756,4 @@ terraform/security/trivy-cache/db/trivy.db
 .github/workflows/1
 terraform/redis/redis-data/temp-1.rdb
 terraform/security/trivy-cache/fanal/fanal.db
+**/dump.rdb
