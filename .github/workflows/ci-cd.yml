@@ -1,60 +1,80 @@
 name: CI/CD Pipeline
+
 on:
   push:
     branches:
       - main
+
 jobs:
   deploy:
     runs-on: self-hosted
+    env:
+      # Zorg dat deze secrets in GitHub zijn aangemaakt onder repository settings > Secrets
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      SSH_KEY: ${{ secrets.SSH_KEY }}
+
+      # Vault variabelen: moeten al correct ingesteld zijn via Secrets
+      VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+      VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+
+      # Remote host info voor de Docker stack deployment
+      REMOTE_HOST: "192.168.178.183"
+      REMOTE_USER: "swarm_user"
+      REMOTE_PATH: "/home/rob/repos/infrastructure"
+
     steps:
+      # Stap 1: Code uitchecken
       - name: Checkout Code
         uses: actions/checkout@v3
 
+      # Stap 2: SSH agent setup voor toegang tot remote host
       - name: Setup SSH Agent
         uses: webfactory/ssh-agent@v0.5.4
         with:
-          ssh-private-key: ${{ secrets.SSH_KEY }}
+          ssh-private-key: ${{ env.SSH_KEY }}
 
+      # Stap 3: Inloggen bij Docker Hub
       - name: Login to Docker Hub
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         run: |
           echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
 
+      # Stap 4: Docker Swarm initialiseren als dat nog niet is gebeurd
       - name: Initialize Docker Swarm
-        run: |
-          docker swarm init || echo "Docker Swarm is mogelijk al geïnitialiseerd"
+        run: docker swarm init || echo "Docker Swarm is mogelijk al geïnitialiseerd"
 
+      # Stap 5: Terraform setup
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.4.0
 
+      # Stap 6: Node.js setup (voor eventuele build stappen)
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '16'
 
+      # Stap 7: Terraform Init in ./terraform directory
       - name: Terraform Init
+        working-directory: ./terraform
         run: terraform init
-        working-directory: ./terraform
 
+      # Stap 8: Terraform Apply (met auto-approve)
       - name: Terraform Apply
-        run: terraform apply -auto-approve
         working-directory: ./terraform
+        run: terraform apply -auto-approve
 
+      # Stap 9: Ansible Playbook runnen voor verdere configuratie
       - name: Run Ansible Playbook
-        run: ansible-playbook playbook.yml -i inventory.yml -vvv
         working-directory: ./ansible
+        run: ansible-playbook playbook.yml -i inventory.yml -vvv
 
+      # Stap 10: Deploy Docker Stack via SSH op remote host
       - name: Deploy Docker Stack
-        env:
-          REMOTE_HOST: 192.168.178.183
-          REMOTE_USER: swarm_user
-          REMOTE_PATH: /home/rob/repos/infrastructure
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ env.REMOTE_USER }}@${{ env.REMOTE_HOST }} "
-            cd ${{ env.REMOTE_PATH }} &&
+          ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
+            cd $REMOTE_PATH &&
             docker stack deploy -c docker-compose.yml infrastructure_stack
           "
+
