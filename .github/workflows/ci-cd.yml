@@ -7,8 +7,8 @@ jobs:
   deploy:
     runs-on: self-hosted
     steps:
-      - name: Forcefully remove infrastructure directory
-        run: sudo rm -rf /home/rob/actions-runner/actions-runner/_work/infrastructure/infrastructure
+      - name: Cleanup workspace
+        run: /home/rob/actions-runner/clean_up.sh
 
       - name: Checkout Code
         uses: actions/checkout@v3
