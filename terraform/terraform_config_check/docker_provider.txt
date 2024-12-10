@@ -1,0 +1,4 @@
+=== Docker Provider from ./main.tf ===
+provider "docker" {
+  host = "unix:///var/run/docker.sock"
+}

@@ -1,0 +1,323 @@
+=== Start script op Tue Dec 10 02:42:44 PM UTC 2024 ===
+Docker containers:
+grafana.1.p4lc7fhvwzcxl4vaxv4cvsv3z
+security-metrics
+promtail
+security-scanner
+backup-service
+loki
+trivy
+redis_exporter
+keycloak
+traefik
+minio
+couchdb
+flask
+postgres
+redis
+cadvisor
+prometheus
+node_exporter
+vault-permanent
+Controleer container: grafana.1.p4lc7fhvwzcxl4vaxv4cvsv3z
+Gevonden configuratie: 
+Configuratie ontbreekt voor grafana.1.p4lc7fhvwzcxl4vaxv4cvsv3z. Handmatige configuratie vereist.
+Controleer container: security-metrics
+Gevonden configuratie: 
+Configuratie ontbreekt voor security-metrics. Handmatige configuratie vereist.
+Controleer container: promtail
+Gevonden configuratie: 
+Configuratie ontbreekt voor promtail. Handmatige configuratie vereist.
+Controleer container: security-scanner
+Gevonden configuratie: 
+Configuratie ontbreekt voor security-scanner. Handmatige configuratie vereist.
+Controleer container: backup-service
+Gevonden configuratie: 
+Configuratie ontbreekt voor backup-service. Handmatige configuratie vereist.
+Controleer container: loki
+Gevonden configuratie: ./logging/loki.tf
+Module prefix: module.logging.
+Container ontbreekt in Terraform state: loki. Probeer te importeren...
+Uitvoeren: terraform import module.logging.docker_container.loki loki
+[0m[1mdata.vault_kv_secret_v2.terraform: Reading...[0m[0m
+[0m[1mdata.vault_kv_secret_v2.terraform: Read complete after 0s [id=secret/data/terraform][0m
+[0m[1mmodule.logging.docker_container.loki: Importing from ID "loki"...[0m
+[0m[1m[32mmodule.logging.docker_container.loki: Import prepared![0m
+[0m[32m  Prepared docker_container for import[0m
+[0m[1mmodule.logging.docker_container.loki: Refreshing state... [id=loki][0m
+[31m[31m╷[0m[0m
+[31m│[0m [0m[1m[31mError: [0m[0m[1mCannot import non-existent remote object[0m
+[31m│[0m [0m
+[31m│[0m [0m[0mWhile attempting to import an existing object to
+[31m│[0m [0m"module.logging.docker_container.loki", the provider detected that no
+[31m│[0m [0mobject exists with the given id. Only pre-existing objects can be imported;
+[31m│[0m [0mcheck that the id is correct and that it is associated with the provider's
+[31m│[0m [0mconfigured region or endpoint, or use "terraform apply" to create a new
+[31m│[0m [0mremote object for this resource.
+[31m╵[0m[0m
+[0m[0m
+Controleer container: trivy
+Gevonden configuratie: ./security/main.tf
+Module prefix: module.security.
+Container ontbreekt in Terraform state: trivy. Probeer te importeren...
+Uitvoeren: terraform import module.security.docker_container.trivy trivy
+[0m[1mdata.vault_kv_secret_v2.terraform: Reading...[0m[0m
+[0m[1mdata.vault_kv_secret_v2.terraform: Read complete after 0s [id=secret/data/terraform][0m
+[0m[1mmodule.security.docker_container.trivy: Importing from ID "trivy"...[0m
+[0m[1m[32mmodule.security.docker_container.trivy: Import prepared![0m
+[0m[32m  Prepared docker_container for import[0m
+[0m[1mmodule.security.docker_container.trivy: Refreshing state... [id=trivy][0m
+[31m[31m╷[0m[0m
+[31m│[0m [0m[1m[31mError: [0m[0m[1mCannot import non-existent remote object[0m
+[31m│[0m [0m
+[31m│[0m [0m[0mWhile attempting to import an existing object to
+[31m│[0m [0m"module.security.docker_container.trivy", the provider detected that no
+[31m│[0m [0mobject exists with the given id. Only pre-existing objects can be imported;
+[31m│[0m [0mcheck that the id is correct and that it is associated with the provider's
+[31m│[0m [0mconfigured region or endpoint, or use "terraform apply" to create a new
+[31m│[0m [0mremote object for this resource.
+[31m╵[0m[0m
+[0m[0m
+Controleer container: redis_exporter
+Gevonden configuratie: ./redis/main.tf
+Module prefix: module.redis.
+Container ontbreekt in Terraform state: redis_exporter. Probeer te importeren...
+Uitvoeren: terraform import module.redis.docker_container.redis_exporter redis_exporter
+[0m[1mdata.vault_kv_secret_v2.terraform: Reading...[0m[0m
+[0m[1mdata.vault_kv_secret_v2.terraform: Read complete after 0s [id=secret/data/terraform][0m
+[0m[1mmodule.redis.docker_container.redis_exporter: Importing from ID "redis_exporter"...[0m
+[0m[1m[32mmodule.redis.docker_container.redis_exporter: Import prepared![0m
+[0m[32m  Prepared docker_container for import[0m
+[0m[1mmodule.redis.docker_container.redis_exporter: Refreshing state... [id=redis_exporter][0m
+[31m[31m╷[0m[0m
+[31m│[0m [0m[1m[31mError: [0m[0m[1mCannot import non-existent remote object[0m
+[31m│[0m [0m
+[31m│[0m [0m[0mWhile attempting to import an existing object to
+[31m│[0m [0m"module.redis.docker_container.redis_exporter", the provider detected that
+[31m│[0m [0mno object exists with the given id. Only pre-existing objects can be
+[31m│[0m [0mimported; check that the id is correct and that it is associated with the
+[31m│[0m [0mprovider's configured region or endpoint, or use "terraform apply" to
+[31m│[0m [0mcreate a new remote object for this resource.
+[31m╵[0m[0m
+[0m[0m
+Controleer container: keycloak
+Gevonden configuratie: ./auth/keycloak.tf
+Module prefix: module.auth.
+Container ontbreekt in Terraform state: keycloak. Probeer te importeren...
+Uitvoeren: terraform import module.auth.docker_container.keycloak keycloak
+[0m[1mdata.vault_kv_secret_v2.terraform: Reading...[0m[0m
+[0m[1mdata.vault_kv_secret_v2.terraform: Read complete after 0s [id=secret/data/terraform][0m
+[0m[1mmodule.auth.docker_container.keycloak: Importing from ID "keycloak"...[0m
+[0m[1m[32mmodule.auth.docker_container.keycloak: Import prepared![0m
+[0m[32m  Prepared docker_container for import[0m
+[0m[1mmodule.auth.docker_container.keycloak: Refreshing state... [id=keycloak][0m
+[31m[31m╷[0m[0m
+[31m│[0m [0m[1m[31mError: [0m[0m[1mCannot import non-existent remote object[0m
+[31m│[0m [0m
+[31m│[0m [0m[0mWhile attempting to import an existing object to
+[31m│[0m [0m"module.auth.docker_container.keycloak", the provider detected that no
+[31m│[0m [0mobject exists with the given id. Only pre-existing objects can be imported;
+[31m│[0m [0mcheck that the id is correct and that it is associated with the provider's
+[31m│[0m [0mconfigured region or endpoint, or use "terraform apply" to create a new
+[31m│[0m [0mremote object for this resource.
+[31m╵[0m[0m
+[0m[0m
+Controleer container: traefik
+Gevonden configuratie: ./traefik.tf
+Module prefix: 
+Container ontbreekt in Terraform state: traefik. Probeer te importeren...
+Uitvoeren: terraform import docker_container.traefik traefik
+[0m[1mdata.vault_kv_secret_v2.terraform: Reading...[0m[0m
+[0m[1mdata.vault_kv_secret_v2.terraform: Read complete after 0s [id=secret/data/terraform][0m
+[0m[1mdocker_container.traefik: Importing from ID "traefik"...[0m
+[0m[1m[32mdocker_container.traefik: Import prepared![0m
+[0m[32m  Prepared docker_container for import[0m
+[0m[1mdocker_container.traefik: Refreshing state... [id=traefik][0m
+[31m[31m╷[0m[0m
+[31m│[0m [0m[1m[31mError: [0m[0m[1mCannot import non-existent remote object[0m
+[31m│[0m [0m
+[31m│[0m [0m[0mWhile attempting to import an existing object to
+[31m│[0m [0m"docker_container.traefik", the provider detected that no object exists
+[31m│[0m [0mwith the given id. Only pre-existing objects can be imported; check that
+[31m│[0m [0mthe id is correct and that it is associated with the provider's configured
+[31m│[0m [0mregion or endpoint, or use "terraform apply" to create a new remote object
+[31m│[0m [0mfor this resource.
+[31m╵[0m[0m
+[0m[0m
+Controleer container: minio
+Gevonden configuratie: ./minio/main.tf
+Module prefix: module.minio.
+Container ontbreekt in Terraform state: minio. Probeer te importeren...
+Uitvoeren: terraform import module.minio.docker_container.minio minio
+[0m[1mdata.vault_kv_secret_v2.terraform: Reading...[0m[0m
+[0m[1mdata.vault_kv_secret_v2.terraform: Read complete after 0s [id=secret/data/terraform][0m
+[0m[1mmodule.minio.docker_container.minio: Importing from ID "minio"...[0m
+[0m[1m[32mmodule.minio.docker_container.minio: Import prepared![0m
+[0m[32m  Prepared docker_container for import[0m
+[0m[1mmodule.minio.docker_container.minio: Refreshing state... [id=minio][0m
+[31m[31m╷[0m[0m
+[31m│[0m [0m[1m[31mError: [0m[0m[1mCannot import non-existent remote object[0m
+[31m│[0m [0m
+[31m│[0m [0m[0mWhile attempting to import an existing object to
+[31m│[0m [0m"module.minio.docker_container.minio", the provider detected that no object
+[31m│[0m [0mexists with the given id. Only pre-existing objects can be imported; check
+[31m│[0m [0mthat the id is correct and that it is associated with the provider's
+[31m│[0m [0mconfigured region or endpoint, or use "terraform apply" to create a new
+[31m│[0m [0mremote object for this resource.
+[31m╵[0m[0m
+[0m[0m
+Controleer container: couchdb
+Gevonden configuratie: ./couchdb/main.tf
+Module prefix: module.couchdb.
+Container ontbreekt in Terraform state: couchdb. Probeer te importeren...
+Uitvoeren: terraform import module.couchdb.docker_container.couchdb couchdb
+[0m[1mdata.vault_kv_secret_v2.terraform: Reading...[0m[0m
+[0m[1mdata.vault_kv_secret_v2.terraform: Read complete after 0s [id=secret/data/terraform][0m
+[0m[1mmodule.couchdb.docker_container.couchdb: Importing from ID "couchdb"...[0m
+[0m[1m[32mmodule.couchdb.docker_container.couchdb: Import prepared![0m
+[0m[32m  Prepared docker_container for import[0m
+[0m[1mmodule.couchdb.docker_container.couchdb: Refreshing state... [id=couchdb][0m
+[31m[31m╷[0m[0m
+[31m│[0m [0m[1m[31mError: [0m[0m[1mCannot import non-existent remote object[0m
+[31m│[0m [0m
+[31m│[0m [0m[0mWhile attempting to import an existing object to
+[31m│[0m [0m"module.couchdb.docker_container.couchdb", the provider detected that no
+[31m│[0m [0mobject exists with the given id. Only pre-existing objects can be imported;
+[31m│[0m [0mcheck that the id is correct and that it is associated with the provider's
+[31m│[0m [0mconfigured region or endpoint, or use "terraform apply" to create a new
+[31m│[0m [0mremote object for this resource.
+[31m╵[0m[0m
+[0m[0m
+Controleer container: flask
+Gevonden configuratie: ./flask/main.tf
+Module prefix: module.flask.
+Container ontbreekt in Terraform state: flask. Probeer te importeren...
+Uitvoeren: terraform import module.flask.docker_container.flask flask
+[0m[1mdata.vault_kv_secret_v2.terraform: Reading...[0m[0m
+[0m[1mdata.vault_kv_secret_v2.terraform: Read complete after 0s [id=secret/data/terraform][0m
+[0m[1mmodule.flask.docker_container.flask: Importing from ID "flask"...[0m
+[0m[1m[32mmodule.flask.docker_container.flask: Import prepared![0m
+[0m[32m  Prepared docker_container for import[0m
+[0m[1mmodule.flask.docker_container.flask: Refreshing state... [id=flask][0m
+[31m[31m╷[0m[0m
+[31m│[0m [0m[1m[31mError: [0m[0m[1mCannot import non-existent remote object[0m
+[31m│[0m [0m
+[31m│[0m [0m[0mWhile attempting to import an existing object to
+[31m│[0m [0m"module.flask.docker_container.flask", the provider detected that no object
+[31m│[0m [0mexists with the given id. Only pre-existing objects can be imported; check
+[31m│[0m [0mthat the id is correct and that it is associated with the provider's
+[31m│[0m [0mconfigured region or endpoint, or use "terraform apply" to create a new
+[31m│[0m [0mremote object for this resource.
+[31m╵[0m[0m
+[0m[0m
+Controleer container: postgres
+Gevonden configuratie: ./auth/postgresql.tf
+Module prefix: module.auth.
+Container ontbreekt in Terraform state: postgres. Probeer te importeren...
+Uitvoeren: terraform import module.auth.docker_container.postgres postgres
+[0m[1mdata.vault_kv_secret_v2.terraform: Reading...[0m[0m
+[0m[1mdata.vault_kv_secret_v2.terraform: Read complete after 0s [id=secret/data/terraform][0m
+[0m[1mmodule.auth.docker_container.postgres: Importing from ID "postgres"...[0m
+[0m[1m[32mmodule.auth.docker_container.postgres: Import prepared![0m
+[0m[32m  Prepared docker_container for import[0m
+[0m[1mmodule.auth.docker_container.postgres: Refreshing state... [id=postgres][0m
+[31m[31m╷[0m[0m
+[31m│[0m [0m[1m[31mError: [0m[0m[1mCannot import non-existent remote object[0m
+[31m│[0m [0m
+[31m│[0m [0m[0mWhile attempting to import an existing object to
+[31m│[0m [0m"module.auth.docker_container.postgres", the provider detected that no
+[31m│[0m [0mobject exists with the given id. Only pre-existing objects can be imported;
+[31m│[0m [0mcheck that the id is correct and that it is associated with the provider's
+[31m│[0m [0mconfigured region or endpoint, or use "terraform apply" to create a new
+[31m│[0m [0mremote object for this resource.
+[31m╵[0m[0m
+[0m[0m
+Controleer container: redis
+Gevonden configuratie: ./redis/main.tf
+Module prefix: module.redis.
+Container ontbreekt in Terraform state: redis. Probeer te importeren...
+Uitvoeren: terraform import module.redis.docker_container.redis redis
+[0m[1mdata.vault_kv_secret_v2.terraform: Reading...[0m[0m
+[0m[1mdata.vault_kv_secret_v2.terraform: Read complete after 0s [id=secret/data/terraform][0m
+[0m[1mmodule.redis.docker_container.redis: Importing from ID "redis"...[0m
+[0m[1m[32mmodule.redis.docker_container.redis: Import prepared![0m
+[0m[32m  Prepared docker_container for import[0m
+[0m[1mmodule.redis.docker_container.redis: Refreshing state... [id=redis][0m
+[31m[31m╷[0m[0m
+[31m│[0m [0m[1m[31mError: [0m[0m[1mCannot import non-existent remote object[0m
+[31m│[0m [0m
+[31m│[0m [0m[0mWhile attempting to import an existing object to
+[31m│[0m [0m"module.redis.docker_container.redis", the provider detected that no object
+[31m│[0m [0mexists with the given id. Only pre-existing objects can be imported; check
+[31m│[0m [0mthat the id is correct and that it is associated with the provider's
+[31m│[0m [0mconfigured region or endpoint, or use "terraform apply" to create a new
+[31m│[0m [0mremote object for this resource.
+[31m╵[0m[0m
+[0m[0m
+Controleer container: cadvisor
+Gevonden configuratie: ./monitoring/cadvisor.tf
+Module prefix: module.monitoring.
+Container ontbreekt in Terraform state: cadvisor. Probeer te importeren...
+Uitvoeren: terraform import module.monitoring.docker_container.cadvisor cadvisor
+[0m[1mdata.vault_kv_secret_v2.terraform: Reading...[0m[0m
+[0m[1mdata.vault_kv_secret_v2.terraform: Read complete after 0s [id=secret/data/terraform][0m
+[0m[1mmodule.monitoring.docker_container.cadvisor: Importing from ID "cadvisor"...[0m
+[0m[1m[32mmodule.monitoring.docker_container.cadvisor: Import prepared![0m
+[0m[32m  Prepared docker_container for import[0m
+[0m[1mmodule.monitoring.docker_container.cadvisor: Refreshing state... [id=cadvisor][0m
+[31m[31m╷[0m[0m
+[31m│[0m [0m[1m[31mError: [0m[0m[1mCannot import non-existent remote object[0m
+[31m│[0m [0m
+[31m│[0m [0m[0mWhile attempting to import an existing object to
+[31m│[0m [0m"module.monitoring.docker_container.cadvisor", the provider detected that
+[31m│[0m [0mno object exists with the given id. Only pre-existing objects can be
+[31m│[0m [0mimported; check that the id is correct and that it is associated with the
+[31m│[0m [0mprovider's configured region or endpoint, or use "terraform apply" to
+[31m│[0m [0mcreate a new remote object for this resource.
+[31m╵[0m[0m
+[0m[0m
+Controleer container: prometheus
+Gevonden configuratie: ./monitoring/prometheus.tf
+Module prefix: module.monitoring.
+Container ontbreekt in Terraform state: prometheus. Probeer te importeren...
+Uitvoeren: terraform import module.monitoring.docker_container.prometheus prometheus
+[0m[1mdata.vault_kv_secret_v2.terraform: Reading...[0m[0m
+[0m[1mdata.vault_kv_secret_v2.terraform: Read complete after 0s [id=secret/data/terraform][0m
+[0m[1mmodule.monitoring.docker_container.prometheus: Importing from ID "prometheus"...[0m
+[0m[1m[32mmodule.monitoring.docker_container.prometheus: Import prepared![0m
+[0m[32m  Prepared docker_container for import[0m
+[0m[1mmodule.monitoring.docker_container.prometheus: Refreshing state... [id=prometheus][0m
+[31m[31m╷[0m[0m
+[31m│[0m [0m[1m[31mError: [0m[0m[1mCannot import non-existent remote object[0m
+[31m│[0m [0m
+[31m│[0m [0m[0mWhile attempting to import an existing object to
+[31m│[0m [0m"module.monitoring.docker_container.prometheus", the provider detected that
+[31m│[0m [0mno object exists with the given id. Only pre-existing objects can be
+[31m│[0m [0mimported; check that the id is correct and that it is associated with the
+[31m│[0m [0mprovider's configured region or endpoint, or use "terraform apply" to
+[31m│[0m [0mcreate a new remote object for this resource.
+[31m╵[0m[0m
+[0m[0m
+Controleer container: node_exporter
+Gevonden configuratie: ./monitoring/node_exporter.tf
+Module prefix: module.monitoring.
+Container ontbreekt in Terraform state: node_exporter. Probeer te importeren...
+Uitvoeren: terraform import module.monitoring.docker_container.node_exporter node_exporter
+[0m[1mdata.vault_kv_secret_v2.terraform: Reading...[0m[0m
+[0m[1mdata.vault_kv_secret_v2.terraform: Read complete after 0s [id=secret/data/terraform][0m
+[0m[1mmodule.monitoring.docker_container.node_exporter: Importing from ID "node_exporter"...[0m
+[0m[1m[32mmodule.monitoring.docker_container.node_exporter: Import prepared![0m
+[0m[32m  Prepared docker_container for import[0m
+[0m[1mmodule.monitoring.docker_container.node_exporter: Refreshing state... [id=node_exporter][0m
+[31m[31m╷[0m[0m
+[31m│[0m [0m[1m[31mError: [0m[0m[1mCannot import non-existent remote object[0m
+[31m│[0m [0m
+[31m│[0m [0m[0mWhile attempting to import an existing object to
+[31m│[0m [0m"module.monitoring.docker_container.node_exporter", the provider detected
+[31m│[0m [0mthat no object exists with the given id. Only pre-existing objects can be
+[31m│[0m [0mimported; check that the id is correct and that it is associated with the
+[31m│[0m [0mprovider's configured region or endpoint, or use "terraform apply" to
+[31m│[0m [0mcreate a new remote object for this resource.
+[31m╵[0m[0m
+[0m[0m
+Script voltooid op Tue Dec 10 02:42:50 PM UTC 2024.

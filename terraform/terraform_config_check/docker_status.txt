@@ -1,0 +1,112 @@
+=== Docker Info ===
+Client: Docker Engine - Community
+ Version:    27.3.1
+ Context:    default
+ Debug Mode: false
+ Plugins:
+  buildx: Docker Buildx (Docker Inc.)
+    Version:  v0.17.1
+    Path:     /usr/libexec/docker/cli-plugins/docker-buildx
+  compose: Docker Compose (Docker Inc.)
+    Version:  v2.29.7
+    Path:     /usr/libexec/docker/cli-plugins/docker-compose
+
+Server:
+ Containers: 19
+  Running: 18
+  Paused: 0
+  Stopped: 1
+ Images: 17
+ Server Version: 27.3.1
+ Storage Driver: overlay2
+  Backing Filesystem: extfs
+  Supports d_type: true
+  Using metacopy: false
+  Native Overlay Diff: true
+  userxattr: false
+ Logging Driver: json-file
+ Cgroup Driver: systemd
+ Cgroup Version: 2
+ Plugins:
+  Volume: local
+  Network: bridge host ipvlan macvlan null overlay
+  Log: awslogs fluentd gcplogs gelf journald json-file local splunk syslog
+ Swarm: active
+  NodeID: zfi3982f1ily7z8xrg67i3c8n
+  Is Manager: true
+  ClusterID: hkctdp9zqp5tm2u9w1shqb9zj
+  Managers: 1
+  Nodes: 1
+  Default Address Pool: 10.0.0.0/8  
+  SubnetSize: 24
+  Data Path Port: 4789
+  Orchestration:
+   Task History Retention Limit: 5
+  Raft:
+   Snapshot Interval: 10000
+   Number of Old Snapshots to Retain: 0
+   Heartbeat Tick: 1
+   Election Tick: 10
+  Dispatcher:
+   Heartbeat Period: 5 seconds
+  CA Configuration:
+   Expiry Duration: 3 months
+   Force Rotate: 0
+  Autolock Managers: false
+  Root Rotation In Progress: false
+  Node Address: 192.168.178.183
+  Manager Addresses:
+   192.168.178.183:2377
+ Runtimes: runc io.containerd.runc.v2
+ Default Runtime: runc
+ Init Binary: docker-init
+ containerd version: 88bf19b2105c8b17560993bee28a01ddc2f97182
+ runc version: v1.2.2-0-g7cb3632
+ init version: de40ad0
+ Security Options:
+  apparmor
+  seccomp
+   Profile: builtin
+  cgroupns
+ Kernel Version: 6.8.0-49-generic
+ Operating System: Ubuntu 24.04.1 LTS
+ OSType: linux
+ Architecture: x86_64
+ CPUs: 8
+ Total Memory: 15.62GiB
+ Name: docker-host01-dev
+ ID: e4b4f8cb-7726-47ed-ac7b-e1b12edb210c
+ Docker Root Dir: /var/lib/docker
+ Debug Mode: false
+ Username: robbrinkkemper@gmail.com
+ Experimental: false
+ Insecure Registries:
+  127.0.0.0/8
+ Live Restore Enabled: false
+
+
+=== Docker Containers ===
+CONTAINER ID   IMAGE                              COMMAND                  CREATED          STATUS                          PORTS                                                              NAMES
+780d8f0fa641   grafana/grafana:latest             "/run.sh"                54 minutes ago   Up 54 minutes                   3000/tcp                                                           grafana.1.p4lc7fhvwzcxl4vaxv4cvsv3z
+d9f72627ecb2   prom/node-exporter:latest          "/bin/node_exporter …"   57 minutes ago   Up 57 minutes                   9100/tcp                                                           security-metrics
+c492b97848b7   grafana/promtail:latest            "/usr/bin/promtail -…"   57 minutes ago   Up 57 minutes (healthy)                                                                            promtail
+538125c4f6d2   alpine:latest                      "/bin/sh -c '      #…"   57 minutes ago   Up 57 minutes (unhealthy)                                                                          security-scanner
+8f68e923b7de   alpine:latest                      "/bin/sh -c '      #…"   57 minutes ago   Up Less than a second                                                                              backup-service
+66e17c1a721b   grafana/loki:latest                "/usr/bin/loki --con…"   57 minutes ago   Restarting (1) 28 seconds ago                                                                      loki
+2c14ea6f2898   aquasec/trivy:latest               "trivy server --list…"   57 minutes ago   Up 57 minutes (unhealthy)                                                                          trivy
+c2d6a907bbe6   oliver006/redis_exporter:latest    "/redis_exporter"        57 minutes ago   Up 57 minutes                   0.0.0.0:9121->9121/tcp                                             redis_exporter
+f80b8de6f5fd   quay.io/keycloak/keycloak:latest   "/opt/keycloak/bin/k…"   57 minutes ago   Up 57 minutes (unhealthy)       8080/tcp, 8443/tcp, 9000/tcp                                       keycloak
+54a23f48a3e8   traefik:v2.4                       "/entrypoint.sh trae…"   57 minutes ago   Up 57 minutes                   0.0.0.0:80->80/tcp, 0.0.0.0:443->443/tcp, 0.0.0.0:8081->8080/tcp   traefik
+97405a1075b8   minio/minio:latest                 "/usr/bin/docker-ent…"   57 minutes ago   Up 57 minutes (healthy)         9000/tcp                                                           minio
+2abd5e322334   couchdb:latest                     "tini -- /docker-ent…"   57 minutes ago   Up 57 minutes (healthy)         4369/tcp, 5984/tcp, 9100/tcp                                       couchdb
+4194e7e5284d   python:3.9-slim                    "sh -c 'apt-get upda…"   57 minutes ago   Up 57 minutes (healthy)                                                                            flask
+b0e703995f67   postgres:13                        "docker-entrypoint.s…"   57 minutes ago   Up 57 minutes (healthy)         5432/tcp                                                           postgres
+dbedba0f8dfb   redis:7-alpine                     "docker-entrypoint.s…"   57 minutes ago   Up 57 minutes (healthy)         6379/tcp                                                           redis
+10ffb79d7a13   gcr.io/cadvisor/cadvisor:latest    "/usr/bin/cadvisor -…"   57 minutes ago   Up 57 minutes (healthy)         0.0.0.0:8082->8080/tcp                                             cadvisor
+5b34b6f75582   prom/prometheus:latest             "/bin/prometheus --c…"   57 minutes ago   Up 57 minutes                   0.0.0.0:9090->9090/tcp                                             prometheus
+92b8df4036a2   prom/node-exporter:latest          "/bin/node_exporter"     57 minutes ago   Up 57 minutes                   0.0.0.0:9100->9100/tcp                                             node_exporter
+97c787ce6031   hashicorp/vault:1.18.2             "docker-entrypoint.s…"   20 hours ago     Up 4 hours                      8200/tcp, 0.0.0.0:8600->8600/tcp, :::8600->8600/tcp                vault-permanent
+
+=== Docker Services ===
+ID             NAME      MODE         REPLICAS   IMAGE                    PORTS
+v7iqdpdr5ula   grafana   replicated   1/1        grafana/grafana:latest   *:3000->3000/tcp
