@@ -7,8 +7,13 @@ jobs:
   deploy:
     runs-on: self-hosted
     steps:
+      - name: Forcefully remove infrastructure directory
+        run: sudo rm -rf /home/rob/actions-runner/actions-runner/_work/infrastructure/infrastructure
+
       - name: Checkout Code
         uses: actions/checkout@v3
+        with:
+          clean: false
 
       - name: Setup SSH Agent
         uses: webfactory/ssh-agent@v0.5.4
