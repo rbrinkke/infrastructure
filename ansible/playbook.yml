@@ -24,15 +24,3 @@
         force: yes
       become_user: rob
 
-    - name: Initialize Terraform
-      command: terraform init -input=false -no-color
-      args:
-        chdir: /home/rob/repos/infrastructure/terraform
-      become_user: rob
-
-    - name: Apply Terraform configuration
-      command: terraform apply -auto-approve -input=false -no-color
-      args:
-        chdir: /home/rob/repos/infrastructure/terraform
-      become_user: rob
-
