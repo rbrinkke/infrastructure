@@ -15,8 +15,25 @@ provider "docker" {
   host = "unix:///var/run/docker.sock"
 }
 
+provider "vault" {
+  # Vault-adres en token worden opgehaald uit omgevingsvariabelen
+  address = var.vault_address
+  token   = var.vault_token
+}
 
-# Haal alle configuratie op uit Vault
+# Variabele voor Vault-adres
+variable "vault_address" {
+  description = "De URL van de Vault server"
+  default     = "http://localhost:8600" # Pas dit aan naar je daadwerkelijke Vault-adres
+}
+
+# Variabele voor Vault-token (wordt ingesteld via omgevingsvariabele)
+variable "vault_token" {
+  description = "De authenticatietoken voor Vault"
+  default     = null
+}
+
+# Haal configuratie op uit Vault
 data "vault_kv_secret_v2" "terraform" {
   mount = "secret"
   name  = "terraform"
