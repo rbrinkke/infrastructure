@@ -59,14 +59,3 @@ jobs:
         working-directory: ./ansible
         run: ansible-playbook playbook.yml -i inventory.yml -vvv
 
-      - name: Deploy Docker Stack
-        env:
-          REMOTE_HOST: 192.168.178.183
-          REMOTE_USER: swarm_user
-          REMOTE_PATH: /home/rob/repos/infrastructure
-        run: |
-          ssh -o StrictHostKeyChecking=no ${{ env.REMOTE_USER }}@${{ env.REMOTE_HOST }} "
-            cd ${{ env.REMOTE_PATH }} &&
-            docker stack deploy -c docker-compose.yml infrastructure_stack
-          "
-
