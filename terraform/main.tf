@@ -16,7 +16,8 @@ provider "docker" {
 }
 
 provider "vault" {
-  # Maakt gebruik van VAULT_ADDR en VAULT_TOKEN uit je omgeving
+  # VAULT_ADDR en VAULT_TOKEN worden via omgevingsvariabelen verstrekt
+  # Je kunt ook hier expliciet de address en token specificeren, maar het is veiliger om deze via omgevingsvariabelen te beheren
 }
 
 # Haal alle configuratie op uit Vault
