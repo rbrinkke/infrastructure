@@ -1,0 +1,26 @@
+- hosts: swarm-manager
+  become: yes
+  tasks:
+    - name: Get system information
+      shell: |
+        echo "Linux-$(uname -m)"
+      register: system_info
+
+    - name: Install Docker Compose
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-{{ system_info.stdout }}"
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+
+    - name: Configure Git safe directory
+      command: git config --global --add safe.directory /home/rob/repos/infrastructure
+      become_user: rob
+
+    - name: Clone repository
+      git:
+        repo: 'https://github.com/rbrinkke/infrastructure.git'
+        dest: /home/rob/repos/infrastructure
+        update: yes
+        force: yes
+      become_user: rob
+

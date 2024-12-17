@@ -1,0 +1,54 @@
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Cleanup workspace
+        run: /home/rob/actions-runner/clean_up.sh
+
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          clean: false
+
+      - name: Setup SSH Agent
+        uses: webfactory/ssh-agent@v0.5.4
+        with:
+          ssh-private-key: ${{ secrets.SSH_KEY }}
+
+      - name: Login to Docker Hub
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+
+      - name: Initialize Docker Swarm
+        run: |
+          docker swarm init || echo "Docker Swarm is mogelijk al geïnitialiseerd"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.4.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Terraform Apply
+        working-directory: ./terraform
+        env:
+          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+        run: terraform apply -auto-approve
+
+      - name: Run Ansible Playbook
+        working-directory: ./ansible
+        run: ansible-playbook playbook.yml -i inventory.yml -vvv
+

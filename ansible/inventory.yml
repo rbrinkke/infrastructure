@@ -1,0 +1,5 @@
+all:
+  hosts:
+    swarm-manager:
+      ansible_host: 192.168.178.183
+      ansible_user: swarm_user
