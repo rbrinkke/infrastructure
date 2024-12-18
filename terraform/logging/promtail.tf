@@ -1,39 +1,16 @@
 # logging/promtail.tf
-resource "local_file" "promtail_configuration" {
-  filename = "${abspath(path.module)}/config/promtail-config.yaml"
-  content  = <<-EOT
-server:
-  http_listen_port: 9080
-  grpc_listen_port: 0
 
-positions:
-  filename: /tmp/positions.yaml
+data "template_file" "promtail" {
+  template = file("${path.module}/templates/promtail-config.tpl")
+  # Als je hier variabelen nodig hebt, kun je die net als bij Loki meegeven:
+  # vars = {
+  #   promtail_variable = var.promtail_variable
+  # }
+}
 
-clients:
-  - url: http://loki:3100/loki/api/v1/push
-
-scrape_configs:
-  - job_name: docker
-    static_configs:
-      - targets:
-          - localhost
-        labels:
-          job: docker
-          __path__: /var/lib/docker/containers/*/*-json.log
-    pipeline_stages:
-      - json:
-          expressions:
-            output: log
-            stream: stream
-            timestamp: time
-      - timestamp:
-          source: timestamp
-          format: RFC3339Nano
-      - labels:
-          stream:
-      - output:
-          source: output
-EOT
+resource "local_file" "promtail_config_generated" {
+  filename = "${var.infrastructure_base_path}/logging-config/promtail-config.yaml"
+  content  = data.template_file.promtail.rendered
 }
 
 resource "docker_container" "promtail_service" {
@@ -42,11 +19,10 @@ resource "docker_container" "promtail_service" {
 
   command = ["-config.file=/etc/promtail/config.yaml"]
 
-  # Run as root to access logs
   user = "root"
 
   volumes {
-    host_path      = local_file.promtail_configuration.filename
+    host_path      = local_file.promtail_config_generated.filename
     container_path = "/etc/promtail/config.yaml"
     read_only      = true
   }
@@ -57,7 +33,6 @@ resource "docker_container" "promtail_service" {
     read_only      = true
   }
 
-  # Add Docker socket for container discovery
   volumes {
     host_path      = "/var/run/docker.sock"
     container_path = "/var/run/docker.sock"
@@ -87,6 +62,8 @@ resource "docker_container" "promtail_service" {
   }
 
   depends_on = [
-    docker_container.loki
+    docker_container.loki,
+    local_file.promtail_config_generated
   ]
 }
+

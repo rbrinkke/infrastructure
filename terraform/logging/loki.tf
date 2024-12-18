@@ -1,41 +1,16 @@
 # logging/loki.tf
-resource "local_file" "loki_config" {
-  filename = "${abspath(path.module)}/config/loki-config.yaml"
-  content  = <<-EOT
-auth_enabled: false
 
-server:
-  http_listen_port: 3100
+data "template_file" "loki" {
+  template = file("${path.module}/templates/loki-config.tpl")
+  vars = {
+    retention_period = var.retention_period
+  }
+}
 
-common:
-  path_prefix: /loki
-  storage:
-    filesystem:
-      chunks_directory: /loki/chunks
-      rules_directory: /loki/rules
-  replication_factor: 1
-  ring:
-    kvstore:
-      store: inmemory
-
-schema_config:
-  configs:
-    - from: 2020-01-01
-      store: boltdb-shipper
-      object_store: filesystem
-      schema: v11
-      index:
-        prefix: index_
-        period: 24h
-
-limits_config:
-  retention_period: 168h
-
-compactor:
-  working_directory: /loki/compactor
-  shared_store: filesystem
-  compaction_interval: 10m
-EOT
+resource "local_file" "loki_config_generated" {
+  # We schrijven de gegenereerde config rechtstreeks in de logging-config directory.
+  filename = "${var.infrastructure_base_path}/logging-config/loki-config.yaml"
+  content  = data.template_file.loki.rendered
 }
 
 resource "docker_container" "loki" {
@@ -45,7 +20,7 @@ resource "docker_container" "loki" {
   command = ["--config.file=/etc/loki/config.yaml"]
 
   volumes {
-    host_path      = local_file.loki_config.filename
+    host_path      = local_file.loki_config_generated.filename
     container_path = "/etc/loki/config.yaml"
     read_only      = true
   }
@@ -106,4 +81,9 @@ resource "docker_container" "loki" {
     retries      = 3
     start_period = "30s"
   }
+
+  depends_on = [
+    local_file.loki_config_generated
+  ]
 }
+

@@ -1,5 +1,3 @@
-# logging/variables.tf
-
 variable "monitoring_network" {
   description = "Naam van het monitoring netwerk"
   type        = string
@@ -16,11 +14,13 @@ variable "logging_network" {
 }
 
 variable "retention_period" {
-  description = "Retentieperiode in dagen"
+  description = "Retentieperiode in uren (bijv. 168 voor 7 dagen)"
   type        = number
+  default     = 168
 }
 
 variable "infrastructure_base_path" {
   type    = string
   default = "/var/lib/infrastructure"
 }
+
