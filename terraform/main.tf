@@ -48,15 +48,29 @@ module "monitoring" {
   grafana_admin_password = data.vault_kv_secret_v2.terraform.data["grafana_admin_password"]
 }
 
-module "auth" {
-  source = "./auth"
+module "postgresql" {
+  source = "./postgresql"
   traefik_network         = docker_network.traefik_network.name
   auth_network            = docker_network.auth_network.name
   postgres_user           = data.vault_kv_secret_v2.terraform.data["postgres_user"]
   postgres_password       = data.vault_kv_secret_v2.terraform.data["postgres_password"]
   keycloak_admin          = data.vault_kv_secret_v2.terraform.data["keycloak_admin"]
-  keycloak_admin_password = data.vault_kv_secret_v2.terraform.data["keycloak_admin_password"]
+  keycloak_admin_password = data.vault_kv_secret_v2.terraform.data["keycloak_admin_password"] # Toegevoegd
 }
+
+module "keycloak" {
+  source = "./keycloak"
+  traefik_network         = docker_network.traefik_network.name
+  auth_network            = docker_network.auth_network.name
+  keycloak_admin          = data.vault_kv_secret_v2.terraform.data["keycloak_admin"]
+  keycloak_admin_password = data.vault_kv_secret_v2.terraform.data["keycloak_admin_password"]
+  postgres_user           = data.vault_kv_secret_v2.terraform.data["postgres_user"]
+  postgres_password       = data.vault_kv_secret_v2.terraform.data["postgres_password"]
+  depends_on = [
+    module.postgresql
+  ]
+}
+
 
 # Data stores
 module "redis" {
@@ -91,37 +105,37 @@ module "flask" {
 }
 
 # Backup module
-module "backup" {
-  source              = "./backup"
-  monitoring_network  = docker_network.monitoring_network.name
-  traefik_network     = docker_network.traefik_network.name
+# module "backup" {
+#   source              = "./backup"
+#   monitoring_network  = docker_network.monitoring_network.name
+#   traefik_network     = docker_network.traefik_network.name
 
-  backup_password     = data.vault_kv_secret_v2.terraform.data["backup_password"]
-  s3_backup_bucket    = data.vault_kv_secret_v2.terraform.data["s3_backup_bucket"]
-  aws_access_key      = data.vault_kv_secret_v2.terraform.data["aws_access_key"]
-  aws_secret_key      = data.vault_kv_secret_v2.terraform.data["aws_secret_key"]
+#   backup_password     = data.vault_kv_secret_v2.terraform.data["backup_password"]
+#   s3_backup_bucket    = data.vault_kv_secret_v2.terraform.data["s3_backup_bucket"]
+#   aws_access_key      = data.vault_kv_secret_v2.terraform.data["aws_access_key"]
+#   aws_secret_key      = data.vault_kv_secret_v2.terraform.data["aws_secret_key"]
 
-  postgres_user       = data.vault_kv_secret_v2.terraform.data["postgres_user"]
-  postgres_password   = data.vault_kv_secret_v2.terraform.data["postgres_password"]
+#   postgres_user       = data.vault_kv_secret_v2.terraform.data["postgres_user"]
+#   postgres_password   = data.vault_kv_secret_v2.terraform.data["postgres_password"]
 
-  redis_password      = data.vault_kv_secret_v2.terraform.data["redis_password"]
+#   redis_password      = data.vault_kv_secret_v2.terraform.data["redis_password"]
 
-  minio_root_user     = data.vault_kv_secret_v2.terraform.data["minio_root_user"]
-  minio_root_password = data.vault_kv_secret_v2.terraform.data["minio_root_password"]
+#   minio_root_user     = data.vault_kv_secret_v2.terraform.data["minio_root_user"]
+#   minio_root_password = data.vault_kv_secret_v2.terraform.data["minio_root_password"]
 
-  couchdb_user        = data.vault_kv_secret_v2.terraform.data["couchdb_user"]
-  couchdb_password    = data.vault_kv_secret_v2.terraform.data["couchdb_password"]
+#   couchdb_user        = data.vault_kv_secret_v2.terraform.data["couchdb_user"]
+#   couchdb_password    = data.vault_kv_secret_v2.terraform.data["couchdb_password"]
 
-  depends_on = [
-    module.auth,
-    module.redis,
-    module.couchdb,
-    module.minio
-  ]
-}
+#   depends_on = [
+#     module.postgresql,
+#     module.redis,
+#     module.couchdb,
+#     module.minio
+#   ]
+# }
 
-module "security" {
-  source             = "./security"
+module "security_scanner" {
+  source             = "./security_scanner"
   monitoring_network = docker_network.monitoring_network.name
   traefik_network    = docker_network.traefik_network.name
   depends_on = [
@@ -136,6 +150,19 @@ module "logging" {
   traefik_network    = docker_network.traefik_network.name
   logging_network    = docker_network.logging_network.name
   retention_period   = tonumber(data.vault_kv_secret_v2.terraform.data["backup_retention_days"])
+
+  depends_on = [
+    module.monitoring
+  ]
+}
+
+module "traefik" {
+  source = "./traefik"
+
+  traefik_network    = docker_network.traefik_network.name
+  monitoring_network = docker_network.monitoring_network.name
+  acme_email        = data.vault_kv_secret_v2.terraform.data["acme_email"]
+  traefik_admin_auth = data.vault_kv_secret_v2.terraform.data["traefik_admin_auth"]
 
   depends_on = [
     module.monitoring

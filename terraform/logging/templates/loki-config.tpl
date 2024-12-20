@@ -17,19 +17,28 @@ common:
 schema_config:
   configs:
     - from: 2020-01-01
-      store: boltdb-shipper
+      store: tsdb
       object_store: filesystem
-      schema: v11
+      schema: v13
       index:
-        prefix: index_
         period: 24h
 
+storage_config:
+  filesystem:
+    directory: /loki/chunks
+
+ingester:
+  max_chunk_age: 2h
+
 limits_config:
-  # Gebruik hier de variabele vanuit Terraform:
-  retention_period: "${retention_period}h"
+  retention_period: "30h"
+  allow_structured_metadata: false
+  reject_old_samples: false
+  reject_old_samples_max_age: 240h
 
 compactor:
   working_directory: /loki/compactor
-  shared_store: filesystem
   compaction_interval: 10m
+  retention_enabled: true
+  delete_request_store: filesystem
 

@@ -1,0 +1,129 @@
+# security/main.tf
+
+resource "docker_container" "trivy" {
+  name     = "trivy"
+  hostname = "trivy"
+  image    = "aquasec/trivy:latest"
+  restart  = "unless-stopped"
+
+  command = concat(
+    [
+      "server",
+      "--listen", "0.0.0.0:8083",
+      "--cache-dir", "/trivy-cache",
+      "--debug"
+    ],
+    var.trivy_token != "" ? ["--token", var.trivy_token] : []
+  )
+
+  volumes {
+    host_path      = "/var/run/docker.sock"
+    container_path = "/var/run/docker.sock"
+  }
+
+  volumes {
+    host_path      = "${var.infrastructure_base_path}/trivy-cache"
+    container_path = "/trivy-cache"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+
+  networks_advanced {
+    name = var.traefik_network
+  }
+
+  labels {
+    label = "traefik.enable"
+    value = "true"
+  }
+
+  labels {
+    label = "traefik.http.routers.trivy.rule"
+    value = "Host(`security.example.com`)"
+  }
+
+  labels {
+    label = "traefik.http.routers.trivy.entrypoints"
+    value = "https"
+  }
+
+  labels {
+    label = "traefik.http.routers.trivy.tls"
+    value = "true"
+  }
+
+  healthcheck {
+    test         = ["CMD", "wget", "--spider", "--quiet", "http://localhost:8083/health"]
+    interval     = "10s"
+    timeout      = "5s"
+    retries      = 3
+    start_period = "10s"
+  }
+}
+
+resource "docker_container" "security_scanner" {
+  name     = "security-scanner"
+  hostname = "security-scanner"
+  image    = "alpine:latest"
+  restart  = "unless-stopped"
+
+  dns_search = ["traefik_network"]
+
+  # Gebruik nu entrypoint.sh in plaats van heredoc
+  command = ["/bin/sh", "-c", "/scanner-scripts/entrypoint.sh"]
+
+  volumes {
+    host_path      = "/var/run/docker.sock"
+    container_path = "/var/run/docker.sock"
+  }
+
+  volumes {
+    host_path      = "${var.infrastructure_base_path}/scanner-results"
+    container_path = "/scanner/results"
+  }
+
+  volumes {
+    host_path      = "${var.infrastructure_base_path}/metrics"
+    container_path = "/scanner/metrics"
+  }
+
+  volumes {
+    host_path      = "${var.infrastructure_base_path}/metrics"
+    container_path = "/metrics"
+  }
+
+  # Nieuwe volume voor scripts
+  volumes {
+    host_path      = "${var.infrastructure_base_path}/security-scans"
+    container_path = "/scanner-scripts"
+  }
+
+  networks_advanced {
+    name = var.monitoring_network
+  }
+
+  networks_advanced {
+    name = var.traefik_network
+  }
+
+  healthcheck {
+    test         = ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:8083/health"]
+    interval     = "30s"
+    timeout      = "10s"
+    retries      = 3
+    start_period = "40s"
+  }
+
+  depends_on = [
+    docker_container.trivy
+  ]
+}
+
+resource "docker_container" "security_metrics" {
+  name  = "security-metrics"
+  image = "prom/node-exporter:latest"
+  # Verdere configuratie voor metrics container...
+}
+

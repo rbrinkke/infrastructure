@@ -17,7 +17,7 @@ resource "docker_container" "loki" {
   name  = "loki"
   image = "grafana/loki:latest"
 
-  command = ["--config.file=/etc/loki/config.yaml"]
+  user = "10001:10001"  # UID:GID voor Loki
 
   volumes {
     host_path      = local_file.loki_config_generated.filename
@@ -81,6 +81,10 @@ resource "docker_container" "loki" {
     retries      = 3
     start_period = "30s"
   }
+
+  command = [
+    "--config.file=/etc/loki/config.yaml",
+    "--config.expand-env=true"] 
 
   depends_on = [
     local_file.loki_config_generated

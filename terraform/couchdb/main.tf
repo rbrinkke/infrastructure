@@ -2,6 +2,12 @@ resource "docker_container" "couchdb" {
   name  = "couchdb"
   image = "couchdb:latest"
 
+  # Poortmapping toevoegen
+  ports {
+    internal = 5984
+    external = 5984
+  }
+
   # Basis CouchDB configuratie
   upload {
     content = <<EOF
